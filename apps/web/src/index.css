@@ -1552,6 +1552,21 @@ a {
   gap: 10px 14px;
   margin: 14px 0;
 }
+.creative-editor-section {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin: 12px 0;
+  padding: 0 14px;
+}
+.creative-editor-section summary {
+  padding: 13px 0;
+  color: var(--deep);
+  font-size: 13px;
+  font-weight: 700;
+}
+.creative-editor-section[open] summary {
+  border-bottom: 1px solid var(--line);
+}
 .creative-fields label {
   display: grid;
   gap: 6px;
@@ -1563,10 +1578,48 @@ a {
   display: block;
 }
 .creative-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 9px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
   margin-top: 18px;
+}
+.creative-actions button {
+  min-height: 46px;
+  white-space: normal;
+  line-height: 1.2;
+}
+.creative-action-save {
+  border-color: var(--line);
+  background: #fff;
+}
+.creative-action-review {
+  border-color: var(--sand);
+  background: var(--pale);
+}
+.creative-action-approve {
+  border-color: #aa8060;
+  background: #f1e4d7;
+  color: var(--deep);
+}
+.creative-action-export {
+  background: var(--deep);
+  border-color: var(--deep);
+  color: #fff;
+}
+.creative-action-publish {
+  grid-column: 1 / -1;
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+.creative-action-hint {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-left: 2px solid var(--gold);
+  background: var(--ivory);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.45;
 }
 .creative-actions button:disabled {
   opacity: 0.48;
@@ -1639,6 +1692,9 @@ a {
   .creative-grid {
     grid-template-columns: 1fr;
   }
+  .creative-preview {
+    order: -1;
+  }
   .creative-toolbar,
   .creative-info,
   .creative-panel {
@@ -1651,9 +1707,13 @@ a {
     grid-template-columns: 1fr;
   }
   .creative-actions button {
-    min-height: 42px;
+    min-height: 50px;
+    scroll-margin-bottom: calc(6rem + env(safe-area-inset-bottom));
+  }
+  .creative-action-publish {
+    min-height: 54px;
   }
   .creative-preview canvas {
-    width: min(100%, 390px);
+    width: min(100%, 320px);
   }
 }

@@ -33,6 +33,7 @@ Ce registre conserve les décisions approuvées et leurs remplacements. Une nouv
 - **Justification :** confidentialité, maîtrise de l'espace disque et possibilité de migration du fournisseur.
 - **Conséquences :** interface de stockage préparée au Lot 0, modèle `media_assets` ajouté au Lot 2 et adaptateur S3/R2 de juridiction UE implémenté localement au Lot 4. Aucun bucket ni identifiant créé ; transfert R2 réel, sauvegarde et restauration non testés.
 - **Statut :** VALIDÉE, adaptateur local testé via stockage isolé ; R2 réel NON VÉRIFIÉ.
+- **Vérification ultérieure du 2026-10-21 :** aller-retour réel réussi dans le bucket de développement déjà configuré, avec objet temporaire supprimé. Les propriétés de confidentialité et de sauvegarde du bucket et le bucket de production ne sont pas encore vérifiés ; le choix de `DEC-003` ne change pas.
 - **Source :** instructions du propriétaire ; `Docs/07_ARCHITECTURE_TECHNIQUE.md`, `Docs/16_DEPLOIEMENT_ET_ENVIRONNEMENTS.md`.
 
 ## DEC-004 — Responsabilités et preuve de publication
@@ -145,3 +146,22 @@ Aucune décision remplacée n'est identifiée dans les preuves disponibles **dep
 - **Conséquences :** templates inspirés des affiches fournies ; les logos intégrés aux affiches de référence ne sont pas extraits ni ajoutés comme fichiers autonomes. Les ressources officielles doivent être chargées et leurs droits vérifiés avant usage réel. L'adaptateur R2 est prêt mais non testé avec un bucket réel.
 - **Statut :** VALIDÉE par le périmètre du Lot 4, implémentation locale en recette ; production NON VÉRIFIÉE.
 - **Source :** instruction de démarrage du Lot 4, affiches locales fournies dans `Docs/Voix d'alumni/Affiches/` et vérifications locales consignées dans le journal.
+
+## DEC-014 — Identité officielle obligatoire pour les affiches du Lot 4
+
+- **Date :** 2026-10-21 ; revue explicite du propriétaire.
+- **Contexte :** la première recette utilisait des logos fictifs ; le propriétaire a fourni ensuite les fichiers autonomes dans `Docs/Voix d'alumni/Logo/`.
+- **Décision :** une affiche ne peut être validée, exportée comme prête à diffuser ni déclarée publiée sans les trois ressources ESMT, CPS et Voix d’Alumni avec droits accordés et preuve. Le logo Voix d’Alumni est le microphone avec deux personnes, sans la mention « Studio de production ». Les originaux restent hors Git et sont importés comme ressources privées par un organisateur autorisé.
+- **Conséquences :** la recette locale emploie ces logos s’ils sont présents, avec portraits synthétiques ; les environnements dépourvus du dossier privé gardent des images de test explicitement fictives. `DEC-013` reste le choix du moteur Canvas ; sa note sur l’absence de logos autonomes décrit seulement l’état initial des fichiers.
+- **Statut :** décision appliquée et testée localement ; usage des logos dans un stockage R2 réel non vérifié.
+- **Source :** revue du Lot 4 et fourniture des fichiers autonomes par le propriétaire.
+- **Vérification ultérieure du 2026-10-21 :** la recette R2 de développement a affiché et exporté les logos de recette récupérés du bucket ; l’affiche et l’UX ont été validées visuellement par le propriétaire. La preuve d’usage des ressources réelles en production reste à établir.
+
+## DEC-015 — Confirmation de publication manuelle par Production
+
+- **Date :** 2026-10-21 ; recette finale demandée par le propriétaire.
+- **Contexte :** une copie ou un export ne prouve pas la diffusion et un clic involontaire ne doit pas créer une publication.
+- **Décision :** la Production seule constate la publication d’un contenu prêt. L’interface demande le canal puis une confirmation explicite ; l’API exige aussi `confirmed_external_publication: true` et la version attendue. Une publication unique est conservée avec canal, version, auteur et horodatage réel, puis la version passe à l’état publié. Les appels répétés ou concurrents sur la même version sont refusés.
+- **Conséquences :** validation éditoriale, export et publication restent trois événements distincts ; aucune diffusion externe n’est effectuée par l’application. L’historique expose aussi l’auteur de la publication.
+- **Statut :** appliquée et testée localement ; diffusion externe réelle non effectuée.
+- **Source :** instruction explicite de validation finale du Lot 4 et rôle Production défini dans `Docs/02_WORKFLOWS_ET_REGLES_METIER.md`.

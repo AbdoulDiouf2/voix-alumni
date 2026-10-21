@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { readFileSync, mkdirSync } from "node:fs";
+import { readFileSync, mkdirSync, existsSync } from "node:fs";
 import { test, expect, type Page } from "@playwright/test";
 import sharp from "sharp";
 import { requireIsolatedE2e } from "./require-isolated-e2e";
@@ -19,20 +19,70 @@ async function login(page: Page, role: "RESPONSABLE" | "PRODUCTION") {
   await page.getByRole("button", { name: "Se connecter" }).click();
   await expect(page.getByRole("heading", { name: /^Bonjour/ })).toBeVisible();
 }
-async function fixturePng(page: Page, label: string) {
+async function fixturePng(
+  page: Page,
+  label: string,
+  width = 700,
+  height = 700,
+) {
+  const encoded = await page.evaluate(
+    ({ name, width, height }) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "#ede0d2";
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = "#bd9477";
+      ctx.beginPath();
+      ctx.arc(
+        width / 2,
+        height * 0.39,
+        Math.min(width * 0.26, height * 0.2),
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.fillStyle = "#76553f";
+      ctx.beginPath();
+      ctx.ellipse(
+        width / 2,
+        height * 0.95,
+        width * 0.42,
+        height * 0.34,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.fillStyle = "#fffdf9";
+      ctx.font = `bold ${Math.max(20, Math.round(width / 16))}px Arial`;
+      ctx.textAlign = "center";
+      ctx.fillText(name, width / 2, height * 0.78);
+      ctx.font = `${Math.max(15, Math.round(width / 30))}px Arial`;
+      ctx.fillText("FICTIF · TEST", width / 2, height * 0.84);
+      return canvas.toDataURL("image/png").split(",")[1];
+    },
+    { name: label, width, height },
+  );
+  return Buffer.from(encoded, "base64");
+}
+async function fixtureLogoPng(page: Page, label: string) {
   const encoded = await page.evaluate((name) => {
     const canvas = document.createElement("canvas");
-    canvas.width = 700;
-    canvas.height = 700;
+    canvas.width = 600;
+    canvas.height = 240;
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "#d2b9a4";
-    ctx.fillRect(0, 0, 700, 700);
-    ctx.fillStyle = "#472e24";
-    ctx.font = "bold 70px Arial";
+    ctx.fillStyle = "#fffdf9";
+    ctx.fillRect(0, 0, 600, 240);
+    ctx.strokeStyle = "#ba9270";
+    ctx.strokeRect(8, 8, 584, 224);
+    ctx.fillStyle = "#181817";
     ctx.textAlign = "center";
-    ctx.fillText(name, 350, 340);
-    ctx.font = "32px Arial";
-    ctx.fillText("FICTIF · TEST", 350, 390);
+    ctx.font = "bold 42px Arial";
+    ctx.fillText(`FICTIF · ${name}`, 300, 113);
+    ctx.font = "20px Arial";
+    ctx.fillText("RESSOURCE DE TEST ISOLÉE", 300, 151);
     return canvas.toDataURL("image/png").split(",")[1];
   }, label);
   return Buffer.from(encoded, "base64");
@@ -40,6 +90,7 @@ async function fixturePng(page: Page, label: string) {
 test("Lot 4 : deux affiches et communications versionnées", async ({
   page,
   browser,
+  request,
 }, testInfo) => {
   test.setTimeout(120_000);
   const responsibleContext = await browser.newContext({
@@ -80,8 +131,24 @@ test("Lot 4 : deux affiches et communications versionnées", async ({
   ).toBe(200);
   await login(page, "PRODUCTION");
   const base = `/api/v1/episodes/${episode.id}`;
-  const portrait = await fixturePng(page, "PORTRAIT");
-  const logo = await fixturePng(page, "LOGO TEST");
+  const portraitTall = await fixturePng(page, "PORTRAIT A", 480, 900);
+  const portraitWide = await fixturePng(page, "PORTRAIT B", 1000, 550);
+  const officialLogo = async (name: string, path: string) =>
+    existsSync(path)
+      ? await sharp(readFileSync(path)).png().toBuffer()
+      : fixtureLogoPng(page, name);
+  const logoEsmt = await officialLogo(
+    "ESMT",
+    "Docs/Voix d'alumni/Logo/ESMTSenegallogo.jpg",
+  );
+  const logoCps = await officialLogo(
+    "CPS",
+    "Docs/Voix d'alumni/Logo/Logo_CPS-without-background.png",
+  );
+  const logoVoix = await officialLogo(
+    "VOIX",
+    "Docs/Voix d'alumni/Logo/Logo VA empilé.png",
+  );
   const upload = async (kind: string, buffer: Buffer) => {
     const result = await page.request.post(`${base}/assets`, {
       multipart: {
@@ -92,10 +159,34 @@ test("Lot 4 : deux affiches et communications versionnées", async ({
     expect(result.status()).toBe(201);
     return result.json();
   };
-  const portraitAsset = await upload("portrait", portrait);
-  const esmt = await upload("logo_esmt", logo);
-  const cps = await upload("logo_cps", logo);
-  for (const asset of [portraitAsset, esmt, cps])
+  const tallAsset = await upload("portrait", portraitTall);
+  const wideAsset = await upload("portrait", portraitWide);
+  const esmt = await upload("logo_esmt", logoEsmt);
+  const cps = await upload("logo_cps", logoCps);
+  const voix = await upload("logo_voix", logoVoix);
+  if (process.env.E2E_R2_RECETTE === "1") {
+    expect(
+      (await request.get(`/api/v1/assets/${tallAsset.id}/content`)).status(),
+    ).toBe(401);
+    const assetResponse = await page.request.get(
+      `/api/v1/assets/${tallAsset.id}/content`,
+    );
+    expect(assetResponse.status()).toBe(200);
+    expect(
+      createHash("sha256")
+        .update(await assetResponse.body())
+        .digest("hex"),
+    ).toBe(tallAsset.sha256);
+    const signed = await page.request.get(
+      `/api/v1/assets/${tallAsset.id}/download`,
+      { maxRedirects: 0 },
+    );
+    expect(signed.status()).toBe(302);
+    const signedUrl = new URL(signed.headers().location);
+    expect(signedUrl.searchParams.get("X-Amz-Expires")).toBe("120");
+    expect((await request.get(signedUrl.toString())).status()).toBe(200);
+  }
+  for (const asset of [tallAsset, wideAsset, esmt, cps, voix])
     expect(
       (
         await responsible.request.patch(`/api/v1/assets/${asset.id}/rights`, {
@@ -107,12 +198,15 @@ test("Lot 4 : deux affiches et communications versionnées", async ({
         })
       ).status(),
     ).toBe(200);
-  for (const purpose of ["portrait_announcement", "portrait_thank_you"])
+  for (const [asset, purpose] of [
+    [tallAsset, "portrait_announcement"],
+    [wideAsset, "portrait_thank_you"],
+  ] as const)
     expect(
       (
         await responsible.request.post(`${base}/consents`, {
           data: {
-            asset_id: portraitAsset.id,
+            asset_id: asset.id,
             purpose,
             status: "granted",
             scope: "Recette fictive isolée",
@@ -122,6 +216,7 @@ test("Lot 4 : deux affiches et communications versionnées", async ({
       ).status(),
     ).toBe(201);
   mkdirSync("Docs/recette/lot-4", { recursive: true });
+  let announcementPosterId = "";
   for (const [kind, label] of [
     ["announcement_poster", "annonce"],
     ["thank_you_poster", "merci"],
@@ -129,19 +224,29 @@ test("Lot 4 : deux affiches et communications versionnées", async ({
     const created = await (
       await page.request.post(`${base}/contents`, { data: { kind } })
     ).json();
+    if (kind === "announcement_poster") announcementPosterId = created.id;
     const fields: Record<string, string> = {
       logo_esmt_asset_id: esmt.id,
       logo_cps_asset_id: cps.id,
+      logo_voix_asset_id: voix.id,
     };
+    if (kind === "announcement_poster") {
+      fields.name = "Éléonore-Maïmouna Ndiaye Diop";
+      fields.job =
+        "Directrice des programmes et partenariats numériques en Afrique de l’Ouest";
+    }
     if (kind === "thank_you_poster") {
-      fields.quote = "Un partage riche en conseils et en perspectives.";
+      fields.promotion = "";
+      fields.quote =
+        "Les opportunités se construisent avec curiosité, confiance et la volonté de partager ce que l’on apprend ensemble.";
       fields.quote_approved = "true";
     }
     const edited = await (
       await page.request.patch(`/api/v1/contents/${created.id}`, {
         data: {
           expected_version: created.version,
-          portrait_asset_id: portraitAsset.id,
+          portrait_asset_id:
+            kind === "announcement_poster" ? tallAsset.id : wideAsset.id,
           fields,
         },
       })
@@ -212,10 +317,14 @@ test("Lot 4 : deux affiches et communications versionnées", async ({
     .getByLabel("Versions de cet épisode")
     .inputValue();
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  const previewText = await page.locator(".message-preview").textContent();
   await page.getByRole("button", { name: "Copier le texte" }).click();
   await expect(
     page.getByText("Texte copié. La publication n’a pas changé d’état."),
   ).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    previewText,
+  );
   const copied = await (
     await page.request.get(`/api/v1/episodes/${episode.id}/creative`)
   ).json();
@@ -258,6 +367,20 @@ test("Lot 4 : deux affiches et communications versionnées", async ({
       }),
     ).toBe(true);
   }
+  let cancelledDialogs = 0;
+  const cancelPublication = (dialog: import("@playwright/test").Dialog) => {
+    cancelledDialogs += 1;
+    if (cancelledDialogs === 1) void dialog.accept("whatsapp_community");
+    else void dialog.dismiss();
+  };
+  page.on("dialog", cancelPublication);
+  await page.getByRole("button", { name: "Marquer comme publié" }).click();
+  page.off("dialog", cancelPublication);
+  expect(cancelledDialogs).toBe(2);
+  const beforePublication = await (
+    await page.request.get(`/api/v1/contents/${messageId}/history`)
+  ).json();
+  expect(beforePublication.publications).toHaveLength(0);
   let dialogCount = 0;
   page.on("dialog", (dialog) => {
     dialogCount += 1;
@@ -276,10 +399,61 @@ test("Lot 4 : deux affiches et communications versionnées", async ({
   ).json();
   expect(published.publications).toHaveLength(1);
   expect(published.publications[0].channel).toBe("whatsapp_community");
+  expect(published.publications[0].version).toBeGreaterThan(0);
+  expect(published.publications[0].author).toBeTruthy();
+  expect(
+    new Date(published.publications[0].published_at).getTime(),
+  ).toBeGreaterThan(0);
+  await page.getByLabel("Nouveau contenu").selectOption("meeting_link");
+  await page.getByRole("button", { name: "Créer un brouillon" }).click();
+  await expect(
+    page.getByText(/Variables manquantes.*Lien de réunion/),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Copier le texte" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Soumettre à relecture" }),
+  ).toBeDisabled();
   await page.goto(`/studio?episode=${episode.id}`);
   await page.getByLabel("Nouveau contenu").selectOption("announcement_poster");
   await page.getByRole("button", { name: "Créer un brouillon" }).click();
   await page.getByLabel("Nom", { exact: true }).fill("Éléonore ".repeat(28));
-  await expect(page.getByText("Nom trop long pour l’affiche")).toBeVisible();
+  await expect(page.locator(".creative-preview .form-error")).toContainText(
+    "Nom trop long pour l’affiche",
+  );
+  if (process.env.E2E_R2_RECETTE === "1") {
+    const fresh = await (await page.request.get(`${base}/creative`)).json();
+    for (const asset of [tallAsset, wideAsset, esmt, cps, voix]) {
+      const persisted = fresh.assets.find(
+        (item: { id: string }) => item.id === asset.id,
+      );
+      expect(persisted.sha256).toBe(asset.sha256);
+      expect(persisted.rights_status).toBe("granted");
+      expect(persisted.rights_evidence_ref).toBeTruthy();
+    }
+    const poster = fresh.contents.find(
+      (item: { id: string }) => item.id === announcementPosterId,
+    );
+    expect(poster.status).toBe("pret_a_publier");
+    const revoked = await responsible.request.patch(
+      `/api/v1/assets/${tallAsset.id}/rights`,
+      {
+        data: { expected_version: 2, status: "revoked", evidence_ref: null },
+      },
+    );
+    expect(revoked.status()).toBe(200);
+    expect(
+      (
+        await page.request.post(`/api/v1/contents/${poster.id}/publish`, {
+          data: {
+            expected_version: poster.version,
+            channel: "other",
+            confirmed_external_publication: true,
+          },
+        })
+      ).status(),
+    ).toBe(409);
+  }
   await responsibleContext.close();
 });

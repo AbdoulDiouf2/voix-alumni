@@ -225,13 +225,13 @@ Toutes les routes exigent une session. Production ne voit que les épisodes tran
 | Route `/api/v1` | Fonction et permission |
 |---|---|
 | `GET /episodes/:id/creative` | Épisode, intervenant, contenus, ressources et consentements ; `source_stale` signale un contenu issu d'une ancienne fiche/date. |
-| `POST /episodes/:id/assets` | Upload privé multipart du portrait ou de logos ESMT/CPS par Production ; métadonnées et empreinte SHA-256 persistées. |
+| `POST /episodes/:id/assets` | Upload privé multipart du portrait ou des logos officiels ESMT, CPS et Voix d’Alumni par Production ; métadonnées et empreinte SHA-256 persistées. |
 | `GET /assets/:id/content`, `GET /assets/:id/download` | Accès contrôlé à la ressource ; téléchargement par URL R2 signée courte en environnement R2, lecture authentifiée en test isolé. |
 | `PATCH /assets/:id/rights`, `POST /episodes/:id/consents` | Responsable ; preuve, portée et version obligatoires selon transition. Révocation prise en compte avant diffusion. |
 | `POST /episodes/:id/contents`, `PATCH /contents/:id`, `POST /contents/:id/submit` | Production ; huit types de contenus, champs ajustables et versions avec historique. |
 | `POST /contents/:id/approve` | Responsable ; contrôle des données obligatoires, de la source actuelle et des droits portrait/logos pour les affiches. |
 | `POST /contents/:id/export` | Production ; PNG 1080 × 1350 pour l'affiche, état prêt pour les messages ; aucun envoi externe. |
-| `POST /contents/:id/publish` | Constat explicite après diffusion réelle, canal et preuve facultative ; aucun envoi externe. |
-| `GET /contents/:id/history` | Révisions et publications, sans modifier le contenu. |
+| `POST /contents/:id/publish` | Production uniquement ; `expected_version`, canal et `confirmed_external_publication: true` obligatoires, preuve facultative ; aucun envoi externe. Une version déjà publiée renvoie `409`. |
+| `GET /contents/:id/history` | Révisions et publications avec canal, version, auteur et horodatage, sans modifier le contenu. |
 
 Le stockage R2 utilise `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` dans l'environnement privé. L'endpoint doit être HTTPS et sous la juridiction `eu`. Aucun bucket ni identifiant n'est créé par l'application. `APP_ENV=test|e2e` active un adaptateur de fichiers isolé dans `/tmp` pour la recette ; ce résultat ne prouve aucun transfert R2 réel.

@@ -546,11 +546,42 @@ describe("Lot 4 creative workflow", () => {
     const prepared = await ready.json();
     expect(prepared.status).toBe("pret_a_publier");
     expect(prepared.published_at).toBeNull();
+    expect(
+      (
+        await send(
+          `/api/v1/contents/${message.id}/publish`,
+          responsible,
+          "POST",
+          {
+            expected_version: prepared.version,
+            channel: "whatsapp_community",
+            confirmed_external_publication: true,
+          },
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await send(
+          `/api/v1/contents/${message.id}/publish`,
+          production,
+          "POST",
+          {
+            expected_version: prepared.version,
+            channel: "whatsapp_community",
+          },
+        )
+      ).status,
+    ).toBe(422);
     const publish = await send(
       `/api/v1/contents/${message.id}/publish`,
       production,
       "POST",
-      { expected_version: prepared.version, channel: "whatsapp_community" },
+      {
+        expected_version: prepared.version,
+        channel: "whatsapp_community",
+        confirmed_external_publication: true,
+      },
     );
     expect(publish.status).toBe(200);
     expect((await publish.json()).status).toBe("publie");
@@ -560,7 +591,11 @@ describe("Lot 4 creative workflow", () => {
           `/api/v1/contents/${message.id}/publish`,
           production,
           "POST",
-          { expected_version: prepared.version, channel: "whatsapp_community" },
+          {
+            expected_version: prepared.version,
+            channel: "whatsapp_community",
+            confirmed_external_publication: true,
+          },
         )
       ).status,
     ).toBe(409);
@@ -569,6 +604,12 @@ describe("Lot 4 creative workflow", () => {
     ).json();
     expect(history.revisions).toHaveLength(5);
     expect(history.publications).toHaveLength(1);
+    expect(history.publications[0].version).toBe(prepared.version);
+    expect(history.publications[0].channel).toBe("whatsapp_community");
+    expect(history.publications[0].author_id).toBe(fixtures[1].id);
+    expect(
+      new Date(history.publications[0].published_at).getTime(),
+    ).toBeGreaterThan(0);
     const poster = await (
       await send(`${base}/contents`, production, "POST", {
         kind: "announcement_poster",
@@ -604,11 +645,16 @@ describe("Lot 4 creative workflow", () => {
     const portrait = await upload("portrait");
     const esmt = await upload("logo_esmt");
     const cps = await upload("logo_cps");
+    const voix = await upload("logo_voix");
     const withPhoto = await (
       await send(`/api/v1/contents/${poster.id}`, production, "PATCH", {
         expected_version: poster.version,
         portrait_asset_id: portrait.id,
-        fields: { logo_esmt_asset_id: esmt.id, logo_cps_asset_id: cps.id },
+        fields: {
+          logo_esmt_asset_id: esmt.id,
+          logo_cps_asset_id: cps.id,
+          logo_voix_asset_id: voix.id,
+        },
       })
     ).json();
     const posterReview = await (
@@ -648,6 +694,17 @@ describe("Lot 4 creative workflow", () => {
       evidence_ref: "Autorisation portrait documentée",
     });
     expect(consent.status).toBe(201);
+    expect(
+      (
+        await send(
+          `/api/v1/contents/${poster.id}/approve`,
+          responsible,
+          "POST",
+          { expected_version: posterReview.version },
+        )
+      ).status,
+    ).toBe(409);
+    expect((await rights(voix, "granted", 1)).status).toBe(200);
     const posterApproved = await send(
       `/api/v1/contents/${poster.id}/approve`,
       responsible,
@@ -682,6 +739,70 @@ describe("Lot 4 creative workflow", () => {
     expect(
       (await sharp(Buffer.from(await binary.arrayBuffer())).metadata()).width,
     ).toBe(1080);
+    expect(
+      (
+        await send(`${base}/consents`, responsible, "POST", {
+          asset_id: portrait.id,
+          purpose: "portrait_thank_you",
+          status: "granted",
+          scope: "Affiche de remerciement",
+          evidence_ref: "Autorisation portrait documentée",
+        })
+      ).status,
+    ).toBe(201);
+    const thanks = await (
+      await send(`${base}/contents`, production, "POST", {
+        kind: "thank_you_poster",
+      })
+    ).json();
+    const thanksEdited = await (
+      await send(`/api/v1/contents/${thanks.id}`, production, "PATCH", {
+        expected_version: thanks.version,
+        portrait_asset_id: portrait.id,
+        fields: {
+          logo_esmt_asset_id: esmt.id,
+          logo_cps_asset_id: cps.id,
+          logo_voix_asset_id: voix.id,
+          quote: "Une citation fictive pour la recette",
+          replay_url: "https://example.invalid/replay",
+        },
+      })
+    ).json();
+    const thanksReview = await (
+      await send(`/api/v1/contents/${thanks.id}/submit`, production, "POST", {
+        expected_version: thanksEdited.version,
+      })
+    ).json();
+    expect(
+      (
+        await send(
+          `/api/v1/contents/${thanks.id}/approve`,
+          responsible,
+          "POST",
+          {
+            expected_version: thanksReview.version,
+          },
+        )
+      ).status,
+    ).toBe(409);
+    const thanksConfirmed = await (
+      await send(`/api/v1/contents/${thanks.id}`, production, "PATCH", {
+        expected_version: thanksReview.version,
+        fields: { quote_approved: "true", replay_confirmed: "true" },
+      })
+    ).json();
+    expect(
+      (
+        await send(
+          `/api/v1/contents/${thanks.id}/approve`,
+          responsible,
+          "POST",
+          {
+            expected_version: thanksConfirmed.version,
+          },
+        )
+      ).status,
+    ).toBe(200);
     expect(
       (
         await request(
@@ -746,6 +867,7 @@ describe("Lot 4 creative workflow", () => {
           {
             expected_version: exportedPoster.version,
             channel: "whatsapp_community",
+            confirmed_external_publication: true,
           },
         )
       ).status,
@@ -775,6 +897,50 @@ describe("Lot 4 creative workflow", () => {
         )
       ).status,
     ).toBe(409);
+    const savedLink = await changed.json();
+    const linkReview = await (
+      await send(
+        `/api/v1/contents/${editedMessage.id}/submit`,
+        production,
+        "POST",
+        {
+          expected_version: savedLink.version,
+        },
+      )
+    ).json();
+    const linkApproved = await (
+      await send(
+        `/api/v1/contents/${editedMessage.id}/approve`,
+        responsible,
+        "POST",
+        {
+          expected_version: linkReview.version,
+        },
+      )
+    ).json();
+    expect(linkApproved.status).toBe("valide");
+    const correctedLink = await (
+      await send(`/api/v1/contents/${editedMessage.id}`, production, "PATCH", {
+        expected_version: linkApproved.version,
+        fields: { meeting_url: "https://example.invalid/meeting-corrected" },
+      })
+    ).json();
+    expect(correctedLink.status).toBe("a_relire");
+    expect(correctedLink.approved_at).toBeNull();
+    const rejectedExportForm = new FormData();
+    rejectedExportForm.append(
+      "expected_version",
+      String(correctedLink.version),
+    );
+    expect(
+      (
+        await request(`/api/v1/contents/${editedMessage.id}/export`, {
+          method: "POST",
+          headers: { cookie: production },
+          body: rejectedExportForm,
+        })
+      ).status,
+    ).toBe(409);
     const currentEpisode = await (await send(base, responsible)).json();
     expect(
       (
@@ -801,7 +967,7 @@ describe("Lot 4 creative workflow", () => {
           production,
           "POST",
           {
-            expected_version: (await changed.json()).version,
+            expected_version: correctedLink.version,
           },
         )
       ).status,

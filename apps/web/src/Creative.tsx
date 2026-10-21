@@ -199,6 +199,10 @@ export function CreativeWorkspace({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [drawErrors, setDrawErrors] = useState<string[]>([]);
+  const [textSettingsOpen, setTextSettingsOpen] = useState(true);
+  const [assetSettingsOpen, setAssetSettingsOpen] = useState(
+    () => typeof window !== "undefined" && window.innerWidth > 850,
+  );
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const load = useCallback(async () => {
     if (!episodeId) {
@@ -234,15 +238,16 @@ export function CreativeWorkspace({
       loadPosterImage(draft.portrait_asset_id),
       loadPosterImage(draft.fields.logo_esmt_asset_id),
       loadPosterImage(draft.fields.logo_cps_asset_id),
+      loadPosterImage(draft.fields.logo_voix_asset_id),
     ])
-      .then(([portrait, esmt, cps]) => {
+      .then(([portrait, esmt, cps, voix]) => {
         if (active && canvasRef.current) {
           setDrawErrors(
             drawPoster(
               canvasRef.current,
               draft.kind as PosterKind,
               draft.fields,
-              { portrait, esmt, cps },
+              { portrait, esmt, cps, voix },
             ),
           );
           canvasRef.current.dataset.ready = "ready";
@@ -350,7 +355,11 @@ export function CreativeWorkspace({
         response = await api<Content>(`/contents/${draft.id}/publish`, {
           method: "POST",
           headers: json(),
-          body: JSON.stringify({ expected_version: draft.version, channel }),
+          body: JSON.stringify({
+            expected_version: draft.version,
+            channel,
+            confirmed_external_publication: true,
+          }),
         });
       } else
         response = await api<Content>(`/contents/${draft.id}/${step}`, {
@@ -421,6 +430,12 @@ export function CreativeWorkspace({
   }
   async function copyMessage() {
     if (!draft) return;
+    if (missing.length) {
+      setError(
+        `Complétez les variables obligatoires : ${missing.map((key) => fieldLabels[key] ?? key).join(", ")}.`,
+      );
+      return;
+    }
     const text = interpolate(draft.body, draft.fields);
     try {
       let copied = false;
@@ -456,6 +471,13 @@ export function CreativeWorkspace({
         : messageKinds.some((choice) => choice.key === item.kind),
     ) ?? [];
   const selected = contents.find((item) => item.id === selectedId);
+  const dirty = Boolean(
+    draft &&
+    selected &&
+    (draft.body !== selected.body ||
+      draft.portrait_asset_id !== selected.portrait_asset_id ||
+      JSON.stringify(draft.fields) !== JSON.stringify(selected.fields)),
+  );
   const missing = draft
     ? [
         ...new Set(
@@ -465,6 +487,64 @@ export function CreativeWorkspace({
         ),
       ]
     : [];
+  const mediaIssues: string[] = [];
+  if (mode === "poster" && draft && data) {
+    const portrait = data.assets.find(
+      (asset) => asset.id === draft.portrait_asset_id,
+    );
+    if (!portrait) mediaIssues.push("portrait manquant");
+    else {
+      if (portrait.rights_status !== "granted" || !portrait.rights_evidence_ref)
+        mediaIssues.push("droits du portrait non confirmés");
+      const purpose =
+        draft.kind === "announcement_poster"
+          ? "portrait_announcement"
+          : "portrait_thank_you";
+      const consent = data.consents.find(
+        (item) => item.asset_id === portrait.id && item.purpose === purpose,
+      );
+      if (
+        consent?.status !== "granted" ||
+        !consent.evidence_ref ||
+        !consent.scope
+      )
+        mediaIssues.push(
+          "consentement du portrait pour cette affiche manquant",
+        );
+    }
+    for (const logoKind of ["logo_esmt", "logo_cps", "logo_voix"] as const) {
+      const asset = data.assets.find(
+        (item) => item.id === draft.fields[`${logoKind}_asset_id`],
+      );
+      if (
+        !asset ||
+        asset.kind !== logoKind ||
+        asset.rights_status !== "granted" ||
+        !asset.rights_evidence_ref
+      )
+        mediaIssues.push(
+          `logo ${logoKind === "logo_voix" ? "Voix d’Alumni" : logoKind.slice(5).toUpperCase()} autorisé manquant`,
+        );
+    }
+  }
+  const resolvedMessage = draft ? interpolate(draft.body, draft.fields) : "";
+  const actionHint = !selected
+    ? "Choisissez un contenu ou créez un brouillon."
+    : selected.source_stale
+      ? "La fiche ou la date a changé : créez un nouveau brouillon avant toute validation."
+      : dirty
+        ? "Modifications non enregistrées : enregistrez une version avant de poursuivre."
+        : selected.status === "brouillon"
+          ? "La Production prépare puis soumet à la Responsable pour relecture."
+          : selected.status === "a_relire"
+            ? mediaIssues.length
+              ? `Validation en attente : ${mediaIssues.join(" ; ")}.`
+              : "La Responsable vérifie les informations et les droits avant de valider."
+            : selected.status === "valide"
+              ? "La Production peut exporter l’affiche ou préparer le message à publier."
+              : selected.status === "pret_a_publier"
+                ? "Après diffusion réelle hors de l’application, constatez la publication avec son canal."
+                : "Publication constatée : consultez les versions et l’historique.";
   return (
     <>
       <PageTitle mode={mode} />
@@ -617,112 +697,136 @@ export function CreativeWorkspace({
                       )}
                       {mode === "poster" ? (
                         <>
-                          <div className="creative-fields">
-                            {[
-                              "name",
-                              "promotion",
-                              "job",
-                              "company",
-                              "date",
-                              "time",
-                              "timezone",
-                              ...(draft.kind === "thank_you_poster"
-                                ? ["quote", "replay_url"]
-                                : []),
-                            ].map((key) => (
-                              <label key={key}>
-                                {fieldLabels[key] ?? key}
-                                <input
-                                  value={draft.fields[key] ?? ""}
-                                  onChange={(event) =>
-                                    setDraft({
-                                      ...draft,
-                                      fields: {
-                                        ...draft.fields,
-                                        [key]: event.target.value,
-                                      },
-                                    })
-                                  }
-                                  disabled={
-                                    organizer.role !== "PRODUCTION" ||
-                                    selected.status === "publie"
-                                  }
-                                />
-                              </label>
-                            ))}
-                            {draft.kind === "thank_you_poster" && (
+                          <details
+                            className="creative-editor-section"
+                            open={textSettingsOpen}
+                            onToggle={(event) =>
+                              setTextSettingsOpen(event.currentTarget.open)
+                            }
+                          >
+                            <summary>Textes et informations</summary>
+                            <div className="creative-fields">
+                              {[
+                                "name",
+                                "promotion",
+                                "job",
+                                "company",
+                                "date",
+                                "time",
+                                "timezone",
+                                ...(draft.kind === "thank_you_poster"
+                                  ? ["quote", "replay_url"]
+                                  : []),
+                              ].map((key) => (
+                                <label key={key}>
+                                  {fieldLabels[key] ?? key}
+                                  <input
+                                    value={draft.fields[key] ?? ""}
+                                    onChange={(event) =>
+                                      setDraft({
+                                        ...draft,
+                                        fields: {
+                                          ...draft.fields,
+                                          [key]: event.target.value,
+                                        },
+                                      })
+                                    }
+                                    disabled={
+                                      organizer.role !== "PRODUCTION" ||
+                                      selected.status === "publie"
+                                    }
+                                  />
+                                </label>
+                              ))}
+                              {draft.kind === "thank_you_poster" && (
+                                <label>
+                                  <input
+                                    type="checkbox"
+                                    checked={
+                                      draft.fields.quote_approved === "true"
+                                    }
+                                    onChange={(event) =>
+                                      setDraft({
+                                        ...draft,
+                                        fields: {
+                                          ...draft.fields,
+                                          quote_approved: event.target.checked
+                                            ? "true"
+                                            : "false",
+                                        },
+                                      })
+                                    }
+                                  />{" "}
+                                  Citation explicitement validée
+                                </label>
+                              )}
+                              {draft.kind === "thank_you_poster" && (
+                                <label>
+                                  <input
+                                    type="checkbox"
+                                    checked={
+                                      draft.fields.replay_confirmed === "true"
+                                    }
+                                    onChange={(event) =>
+                                      setDraft({
+                                        ...draft,
+                                        fields: {
+                                          ...draft.fields,
+                                          replay_confirmed: event.target.checked
+                                            ? "true"
+                                            : "false",
+                                        },
+                                      })
+                                    }
+                                  />
+                                  Disponibilité du replay confirmée
+                                </label>
+                              )}
+                            </div>
+                          </details>
+                          <details
+                            className="creative-editor-section"
+                            open={assetSettingsOpen}
+                            onToggle={(event) =>
+                              setAssetSettingsOpen(event.currentTarget.open)
+                            }
+                          >
+                            <summary>Portrait, logos et cadrage</summary>
+                            <div className="creative-fields">
                               <label>
-                                <input
-                                  type="checkbox"
-                                  checked={
-                                    draft.fields.quote_approved === "true"
-                                  }
+                                Portrait de cet épisode
+                                <select
+                                  value={draft.portrait_asset_id ?? ""}
                                   onChange={(event) =>
                                     setDraft({
                                       ...draft,
-                                      fields: {
-                                        ...draft.fields,
-                                        quote_approved: event.target.checked
-                                          ? "true"
-                                          : "false",
-                                      },
+                                      portrait_asset_id:
+                                        event.target.value || null,
                                     })
                                   }
-                                />{" "}
-                                Citation explicitement validée
-                              </label>
-                            )}
-                            {draft.kind === "thank_you_poster" && (
-                              <label>
-                                <input
-                                  type="checkbox"
-                                  checked={
-                                    draft.fields.replay_confirmed === "true"
-                                  }
-                                  onChange={(event) =>
-                                    setDraft({
-                                      ...draft,
-                                      fields: {
-                                        ...draft.fields,
-                                        replay_confirmed: event.target.checked
-                                          ? "true"
-                                          : "false",
-                                      },
-                                    })
-                                  }
-                                />
-                                Disponibilité du replay confirmée
-                              </label>
-                            )}
-                            <label>
-                              Portrait de cet épisode
-                              <select
-                                value={draft.portrait_asset_id ?? ""}
-                                onChange={(event) =>
-                                  setDraft({
-                                    ...draft,
-                                    portrait_asset_id:
-                                      event.target.value || null,
-                                  })
-                                }
-                                disabled={organizer.role !== "PRODUCTION"}
-                              >
-                                <option value="">
-                                  Choisir un portrait importé
-                                </option>
-                                {selectorData(data, "portrait").map((asset) => (
-                                  <option value={asset.id} key={asset.id}>
-                                    {asset.filename} · {asset.rights_status}
+                                  disabled={organizer.role !== "PRODUCTION"}
+                                >
+                                  <option value="">
+                                    Choisir un portrait importé
                                   </option>
-                                ))}
-                              </select>
-                            </label>
-                            {(["logo_esmt", "logo_cps"] as const).map(
-                              (logoKind) => (
+                                  {selectorData(data, "portrait").map(
+                                    (asset) => (
+                                      <option value={asset.id} key={asset.id}>
+                                        {asset.filename} · {asset.rights_status}
+                                      </option>
+                                    ),
+                                  )}
+                                </select>
+                              </label>
+                              {(
+                                ["logo_esmt", "logo_cps", "logo_voix"] as const
+                              ).map((logoKind) => (
                                 <label key={logoKind}>
                                   {logoKind === "logo_esmt"
                                     ? "Logo officiel ESMT"
-                                    : "Logo officiel CPS"}
+                                    : logoKind === "logo_cps"
+                                      ? "Logo officiel CPS"
+                                      : "Logo officiel Voix d’Alumni"}
                                   <select
                                     value={
                                       draft.fields[`${logoKind}_asset_id`] ?? ""
@@ -752,48 +856,52 @@ export function CreativeWorkspace({
                                     )}
                                   </select>
                                 </label>
-                              ),
-                            )}
-                            {["crop_x", "crop_y"].map((key) => (
-                              <label key={key}>
-                                {fieldLabels[key]}
+                              ))}
+                              {["crop_x", "crop_y"].map((key) => (
+                                <label key={key}>
+                                  {fieldLabels[key]} ·{" "}
+                                  {Math.round(
+                                    Number(draft.fields[key] ?? "0.5") * 100,
+                                  )}{" "}
+                                  %
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max="1"
+                                    step="0.01"
+                                    value={draft.fields[key] ?? "0.5"}
+                                    onChange={(event) =>
+                                      setDraft({
+                                        ...draft,
+                                        fields: {
+                                          ...draft.fields,
+                                          [key]: event.target.value,
+                                        },
+                                      })
+                                    }
+                                  />
+                                </label>
+                              ))}
+                              <label>
                                 <input
-                                  type="range"
-                                  min="0"
-                                  max="1"
-                                  step="0.01"
-                                  value={draft.fields[key] ?? "0.5"}
+                                  type="checkbox"
+                                  checked={draft.fields.grayscale !== "false"}
                                   onChange={(event) =>
                                     setDraft({
                                       ...draft,
                                       fields: {
                                         ...draft.fields,
-                                        [key]: event.target.value,
+                                        grayscale: event.target.checked
+                                          ? "true"
+                                          : "false",
                                       },
                                     })
                                   }
-                                />
+                                />{" "}
+                                Portrait en noir et blanc
                               </label>
-                            ))}
-                            <label>
-                              <input
-                                type="checkbox"
-                                checked={draft.fields.grayscale !== "false"}
-                                onChange={(event) =>
-                                  setDraft({
-                                    ...draft,
-                                    fields: {
-                                      ...draft.fields,
-                                      grayscale: event.target.checked
-                                        ? "true"
-                                        : "false",
-                                    },
-                                  })
-                                }
-                              />{" "}
-                              Portrait en noir et blanc
-                            </label>
-                          </div>
+                            </div>
+                          </details>
                         </>
                       ) : (
                         <>
@@ -870,50 +978,76 @@ export function CreativeWorkspace({
                           )}
                         </>
                       )}
-                      <div className="creative-actions">
+                      <div
+                        className="creative-actions"
+                        aria-label="Actions éditoriales"
+                      >
                         <button
-                          className="btn"
+                          className="btn creative-action-save"
                           type="button"
                           onClick={() => void save()}
+                          title={
+                            dirty
+                              ? "Enregistrer les modifications"
+                              : "Aucune modification à enregistrer"
+                          }
                           disabled={
                             organizer.role !== "PRODUCTION" ||
                             busy ||
+                            !dirty ||
                             selected.status === "publie"
                           }
                         >
                           Enregistrer une version
                         </button>
                         <button
-                          className="btn"
+                          className="btn creative-action-review"
                           type="button"
                           onClick={() => void action("submit")}
+                          title={actionHint}
                           disabled={
                             organizer.role !== "PRODUCTION" ||
                             busy ||
+                            dirty ||
+                            selected.source_stale ||
+                            missing.length > 0 ||
                             !["brouillon", "a_relire"].includes(selected.status)
                           }
                         >
                           Soumettre à relecture
                         </button>
                         <button
-                          className="btn"
+                          className="btn creative-action-approve"
                           type="button"
                           onClick={() => void action("approve")}
+                          title={actionHint}
                           disabled={
                             organizer.role !== "RESPONSABLE" ||
                             busy ||
+                            selected.source_stale ||
+                            mediaIssues.length > 0 ||
                             selected.status !== "a_relire"
                           }
                         >
                           Valider
                         </button>
                         <button
-                          className="btn"
+                          className="btn creative-action-export"
                           type="button"
                           onClick={() => void action("export")}
+                          title={
+                            drawErrors.length
+                              ? drawErrors.join(" · ")
+                              : actionHint
+                          }
                           disabled={
                             organizer.role !== "PRODUCTION" ||
                             busy ||
+                            dirty ||
+                            selected.source_stale ||
+                            mediaIssues.length > 0 ||
+                            (mode === "poster" && drawErrors.length > 0) ||
+                            (mode === "message" && missing.length > 0) ||
                             selected.status !== "valide"
                           }
                         >
@@ -922,16 +1056,31 @@ export function CreativeWorkspace({
                             : "Marquer prêt à publier"}
                         </button>
                         <button
-                          className="btn primary"
+                          className="btn creative-action-publish"
                           type="button"
                           onClick={() => void action("publish")}
+                          title={actionHint}
                           disabled={
-                            busy || selected.status !== "pret_a_publier"
+                            organizer.role !== "PRODUCTION" ||
+                            busy ||
+                            dirty ||
+                            selected.source_stale ||
+                            mediaIssues.length > 0 ||
+                            selected.status !== "pret_a_publier"
                           }
                         >
                           Marquer comme publié
                         </button>
                       </div>
+                      <p className="creative-action-hint" role="status">
+                        {actionHint}
+                        {mode === "poster" && drawErrors.length > 0 && (
+                          <>
+                            {" "}
+                            L’export attend aussi : {drawErrors.join(" · ")}.
+                          </>
+                        )}
+                      </p>
                       <History contentId={draft.id} />
                     </section>
                     <section className="card creative-panel creative-preview">
@@ -962,12 +1111,18 @@ export function CreativeWorkspace({
                       ) : (
                         <>
                           <pre className="message-preview">
-                            {interpolate(draft.body, draft.fields)}
+                            {resolvedMessage}
                           </pre>
                           <button
                             className="btn"
                             type="button"
                             onClick={() => void copyMessage()}
+                            disabled={missing.length > 0}
+                            title={
+                              missing.length
+                                ? "Complétez les variables obligatoires avant copie"
+                                : "Copier exactement l’aperçu"
+                            }
                           >
                             Copier le texte
                           </button>
@@ -1091,6 +1246,7 @@ function AssetPanel({
             <option value="portrait">Portrait</option>
             <option value="logo_esmt">Logo officiel ESMT</option>
             <option value="logo_cps">Logo officiel CPS</option>
+            <option value="logo_voix">Logo officiel Voix d’Alumni</option>
           </select>
         </label>
         <label>
@@ -1146,7 +1302,9 @@ function AssetPanel({
               <option value="">Choisir une ressource</option>
               {assets
                 .filter((item) =>
-                  ["portrait", "logo_esmt", "logo_cps"].includes(item.kind),
+                  ["portrait", "logo_esmt", "logo_cps", "logo_voix"].includes(
+                    item.kind,
+                  ),
                 )
                 .map((asset) => (
                   <option key={asset.id} value={asset.id}>
@@ -1259,7 +1417,12 @@ function History({ contentId }: { contentId: string }) {
       author: string;
       occurred_at: string;
     }[];
-    publications: { version: number; channel: string; published_at: string }[];
+    publications: {
+      version: number;
+      channel: string;
+      author: string;
+      published_at: string;
+    }[];
   } | null>(null);
   useEffect(() => {
     void api<typeof history>(`/contents/${contentId}/history`)
@@ -1285,7 +1448,7 @@ function History({ contentId }: { contentId: string }) {
       ))}
       {history?.publications.map((item) => (
         <p key={`${item.version}-${item.channel}`}>
-          Canal : {item.channel} ·{" "}
+          Version v{item.version} · Canal : {item.channel} · {item.author} ·{" "}
           {new Date(item.published_at).toLocaleString("fr-FR")}
         </p>
       ))}

@@ -30,7 +30,7 @@ const kinds = [
 ] as const;
 type Kind = (typeof kinds)[number];
 const posterKinds = new Set<Kind>(["announcement_poster", "thank_you_poster"]);
-const assetKinds = ["portrait", "logo_esmt", "logo_cps"] as const;
+const assetKinds = ["portrait", "logo_esmt", "logo_cps", "logo_voix"] as const;
 const updateSchema = z
   .object({
     expected_version: z.number().int().positive(),
@@ -45,6 +45,7 @@ const versionSchema = z
 const publicationSchema = versionSchema
   .extend({
     channel: z.enum(["whatsapp_community", "whatsapp_group", "email", "other"]),
+    confirmed_external_publication: z.literal(true),
     proof_ref: z.string().trim().max(1000).nullable().optional(),
   })
   .strict();
@@ -112,13 +113,14 @@ function initialContent(
     grayscale: "true",
     logo_esmt_asset_id: "",
     logo_cps_asset_id: "",
+    logo_voix_asset_id: "",
   };
   const token = (key: string) => `{{${key}}}`;
   const t = token;
   const body: Record<Kind, string> = {
     announcement_poster: "",
     thank_you_poster: "",
-    announcement_message: `🎙 VOIX D’ALUMNI — PROCHAINE SESSION !\n\nNous aurons le plaisir d’échanger avec ${t("name")}, promotion ${t("promotion")},\n${t("job")}${person.company ? ` chez ${t("company")}` : ""}.\n\n📅 ${t("date")}\n🕕 ${t("time")} (${t("timezone")})\n💻 En visioconférence\n\nAu programme : parcours, expériences et conseils inspirants.\n\nS’INSPIRER · PARTAGER · RÉUSSIR ENSEMBLE`,
+    announcement_message: `🎙 VOIX D’ALUMNI — PROCHAINE SESSION !\n\nNous aurons le plaisir d’échanger avec ${t("name")}${person.promotionYear ? `, promotion ${t("promotion")}` : ""},\n${t("job")}${person.company ? ` chez ${t("company")}` : ""}.\n\n📅 ${t("date")}\n🕕 ${t("time")} (${t("timezone")})\n💻 En visioconférence\n\nAu programme : parcours, expériences et conseils inspirants.\n\nS’INSPIRER · PARTAGER · RÉUSSIR ENSEMBLE`,
     meeting_reminder: `⏰ Rappel — Voix d’Alumni, épisode ${t("episode_number")}\n\nRetrouvons ${t("name")} demain, ${t("date")}, à ${t("time")} (${t("timezone")}).\n\n💻 Lien de la réunion : ${t("meeting_url")}\nÀ très bientôt !`,
     meeting_link: `💻 Lien de la réunion Voix d’Alumni avec ${t("name")}\n\n${t("meeting_url")}\n📅 ${t("date")} à ${t("time")} (${t("timezone")})`,
     hot_thanks: `🙏 Un grand merci à ${t("name")} et à toutes les personnes présentes à cette session de Voix d’Alumni !\n\nVotre avis nous aide à améliorer les prochaines rencontres. Prenez deux minutes pour partager votre retour :\n👉 ${t("feedback_url")}\n\nS’INSPIRER · PARTAGER · RÉUSSIR ENSEMBLE`,
@@ -233,7 +235,7 @@ export function registerLot4Routes(app: Hono<BusinessEnv>, database: Database) {
     )
       return false;
     const fields = JSON.parse(content.fieldsJson) as Record<string, string>;
-    for (const kind of ["logo_esmt", "logo_cps"] as const) {
+    for (const kind of ["logo_esmt", "logo_cps", "logo_voix"] as const) {
       const id = fields[`${kind}_asset_id`];
       if (!id) return false;
       const logo = await assetFor(id, content.episodeId);
@@ -746,8 +748,9 @@ export function registerLot4Routes(app: Hono<BusinessEnv>, database: Database) {
         .where(eq(contentRevisions.contentId, entry.content.id))
         .orderBy(desc(contentRevisions.version)),
       db
-        .select()
+        .select({ publication: contentPublications, author: user.name })
         .from(contentPublications)
+        .innerJoin(user, eq(contentPublications.publishedBy, user.id))
         .where(eq(contentPublications.contentId, entry.content.id))
         .orderBy(desc(contentPublications.publishedAt)),
     ]);
@@ -760,10 +763,12 @@ export function registerLot4Routes(app: Hono<BusinessEnv>, database: Database) {
         author,
         occurred_at: date(r.occurredAt),
       })),
-      publications: publications.map((p) => ({
+      publications: publications.map(({ publication: p, author }) => ({
         version: p.contentVersion,
         channel: p.channel,
         proof_ref: p.proofRef,
+        author,
+        author_id: p.publishedBy,
         published_at: date(p.publishedAt),
       })),
     });
@@ -1075,6 +1080,8 @@ export function registerLot4Routes(app: Hono<BusinessEnv>, database: Database) {
   });
   app.post("/api/v1/contents/:id/publish", async (c) => {
     const actor = c.get("organizer");
+    if (actor.role !== "PRODUCTION")
+      return c.json({ error: { code: "FORBIDDEN" } }, 403);
     const parsed = publicationSchema.safeParse(
       await c.req.json().catch(() => null),
     );
