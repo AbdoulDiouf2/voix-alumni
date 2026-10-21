@@ -84,3 +84,9 @@ Sur téléphone : déroulé des étapes en liste ou accordéon, suivi du panneau
 Avant chaque validation du lot UI : captures desktop/mobile des 8 rubriques, comparaison à la maquette validée, audit du scrolling, vérification des états vides et des erreurs. Aucun « rebranding moderne » non demandé. Si une divergence est inévitable pour l'accessibilité, la documenter avec compromis proposé.
 
 Références : [spécifications](03_SPECIFICATIONS_FONCTIONNELLES.md) · [affiches](06_COMMUNICATIONS_ET_TEMPLATES.md).
+
+## Vérification Lot 1
+
+Le shell React reprend les jetons, Georgia, le panneau latéral de 253 px, la barre haute et la navigation mobile de la maquette inchangée. Les captures desktop/mobile des écrans de connexion, des deux tableaux de bord et de la rubrique Épisodes sont sous `Docs/recette/lot-1/`. Les fonctions métier des lots suivants apparaissent en états vides ou « Prévu au Lot X », sans données illustratives de la maquette.
+
+La finition du Lot 1 compacte uniquement la présentation de connexion sous 800 px : la grille ne répartit plus artificiellement la hauteur sur mobile, et le texte introductif secondaire est masqué sous 600 px. Sur la taille mobile de recette, le champ de mot de passe est visible avant le bas de l’écran. La composition desktop, les couleurs et les polices sont conservées. L’accueil salue le premier élément du nom d’affichage du compte ; si le nom est vide, il affiche « Bonjour à vous ». Le rôle reste indiqué par son badge.

@@ -18,3 +18,5 @@ export async function pingDatabase(connectionString: string): Promise<void> {
     await pool.end();
   }
 }
+
+export { organizerMemberships, securityEvents } from "./schema.js";

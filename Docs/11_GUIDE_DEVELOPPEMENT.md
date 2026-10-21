@@ -1,51 +1,62 @@
 # 11 — Guide de développement et conventions
 
-> **Projet :** Voix d’Alumni Studio · **Mise à jour :** 21 octobre 2026 · **Statut :** socle local du Lot 0 implémenté ; fonctions métier NON IMPLÉMENTÉES
+> **Projet :** Voix d’Alumni Studio · **Mise à jour :** 21 octobre 2026 · **Statut :** Lots 0–1 implémentés localement ; Lot 2 bloqué jusqu’à validation
 > **Référence UX :** `Docs/voix_alumni_studio_prototype.html`, inchangée.
 
-## 1. Ce qui existe maintenant
+## 1. État du dépôt
 
-Monorepo npm workspaces : `apps/web` (React/Vite/Tailwind, configuration shadcn/ui et page de santé), `apps/api` (Hono, `/api/health`, `/api/ready`), `packages/contracts` (schéma Zod de santé), `packages/db` (connexion Drizzle/PostgreSQL). Better Auth et l'adaptateur Drizzle sont verrouillés comme dépendances mais **aucune route d'auth ni compte n'est actif au Lot 0**. Le port de stockage `PrivateObjectStore` est défini ; l'adaptateur Cloudflare R2, les buckets et les identifiants n'existent pas encore. Aucun workflow métier, formulaire de feedback ou studio d'affiches opérationnel n'est présent.
+Le monorepo npm contient `apps/web` (React/Vite/Tailwind, shell responsive), `apps/api` (Hono et Better Auth dans le même processus), `packages/db` (PostgreSQL/Drizzle, tables Better Auth, rôles et migrations) et `packages/contracts` (contrats de santé, identité, rôle et tableau de bord). Les routes `/api/auth/*`, `/api/health`, `/api/ready`, `/api/capabilities` et les routes protégées du tableau de bord fonctionnent localement. Les deux rôles sont contrôlés côté serveur. Les écrans des lots suivants affichent explicitement un état vide ; aucun dossier métier n’est connecté.
 
-## 2. Versions verrouillées
+Le port `PrivateObjectStore` est défini, sans adaptateur ni bucket R2. Google OAuth est configuré seulement si `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET` sont fournis ; sans ces valeurs, aucun bouton Google n’apparaît. Le callback et la liaison réelle nécessitent une recette avec le projet Google autorisé.
 
-Le fichier `package-lock.json` est la référence exacte. Versions directes installées au Lot 0 : Node cible 24.22.0 (`.nvmrc`, installé temporairement sous `/tmp/voix-alumni-node24` pour la vérification sans installation globale), React/React DOM 19.3.1, Vite 8.3.4, Tailwind et plugin Vite 4.3.3, Hono 4.13.13, `@hono/node-server` 2.1.5, Better Auth et adaptateur Drizzle 1.7.12, Drizzle ORM 0.45.4, Drizzle Kit 0.31.11, `pg` 8.23.1, TypeScript 5.9.3, Vitest 5.0.5, ESLint 10.13.0 et Prettier 3.9.10. PostgreSQL local est `postgres:17.11-bookworm` ; l'image production sera fixée par empreinte lors d'un lot ultérieur. Les composants shadcn/ui sont du code local, sans service externe.
+## 2. Versions et isolation
 
-Node 20.20.2 reste installé sur l'hôte pour les autres applications. Utiliser Node 24 **dans l'environnement du projet** (gestionnaire de versions utilisateur ou conteneur futur), sans modifier les binaires globaux. Les versions npm ont été résolues par `npm install` et contrôlées par typecheck/build/tests ; cela ne constitue pas une recette des fonctions des lots suivants.
+`package-lock.json` verrouille les versions. Node 24.22.0 (`.nvmrc`) est utilisé par projet ; le Node global du VPS reste inchangé. Versions directes principales : React/React DOM 19.3.1, Vite 8.3.4, Tailwind 4.3.3, Hono 4.13.13, Better Auth et adaptateur Drizzle 1.7.12, Drizzle ORM 0.45.4, Drizzle Kit 0.31.11, PostgreSQL `17.11-bookworm`, React Router 7.18.4, Playwright 1.64.0. L’outil de génération du schéma Better Auth est `auth@1.7.12`. Consulter les `package.json` pour la liste complète.
 
 ## 3. Premier démarrage local
 
-1. Utiliser Node 24 indiqué par `.nvmrc` ; vérifier `node --version`. Ne pas exécuter avec le Node 20 de l'hôte.
-2. `npm ci` à la racine. Le lockfile doit être conservé.
-3. Copier `.env.example` vers `.env`, remplacer les valeurs fictives par des secrets locaux aléatoires et garder `.env` non suivi (`chmod 600 .env`). Pour le Lot 0, seules les variables PostgreSQL et API sont utilisées ; ne renseigner aucun identifiant R2 ou Google réel.
-4. `docker compose -f compose.dev.yml up -d db` : crée uniquement `voix-alumni-lot0-db-1`, son volume/réseau dédiés et expose PostgreSQL sur `127.0.0.1:55432`.
-5. `npm run build`, puis dans deux terminaux `npm run dev:api` et `npm run dev:web`. API : `127.0.0.1:8787` ; web : `127.0.0.1:5173`. Vite proxifie `/api` vers Hono.
-6. Contrôler `GET http://127.0.0.1:8787/api/health` (`200`) et `/api/ready` (`200` avec la DB, `503` sinon). La page locale affiche l'état de `/api/health`.
+1. Sélectionner Node 24 dans l’environnement du projet, puis `npm ci` à la racine.
+2. Copier `.env.example` vers `.env`, remplacer les valeurs fictives par des secrets aléatoires et faire `chmod 600 .env`. Ne pas committer ce fichier.
+3. `docker compose -f compose.dev.yml up -d db` démarre uniquement PostgreSQL Voix d’Alumni sur `127.0.0.1:55432`.
+4. `npm run db:migrate -w @voix-alumni/db` applique les migrations versionnées à cette seule base de développement.
+5. Dans deux terminaux : `npm run dev:api` et `npm run dev:web`. Ouvrir `http://127.0.0.1:5173`. L’API écoute sur `127.0.0.1:8787` ; Vite relaie `/api`.
+6. Vérifier `/api/health` (`200`), `/api/ready` (`200` avec DB, `503` sinon), puis la page de connexion.
 
-L'arrêt de la base locale peut se faire avec `docker compose -f compose.dev.yml stop db`, sans supprimer le volume. Aucun `down -v`, `prune`, reset global ou opération sur un autre projet.
+Ne jamais utiliser `drizzle-kit push` sur une base de production. L’arrêt local se fait avec `docker compose -f compose.dev.yml stop db`, sans `down -v` ni nettoyage global.
 
-## 4. Commandes de contrôle réellement exécutées
+## 4. Comptes initiaux et récupération privée
+
+La commande `npm run admin -w @voix-alumni/api -- …` s’exécute **sur le serveur de développement**, jamais depuis le navigateur. Elle accepte `provision`, `reset` ou `revoke` et lit le mot de passe depuis stdin, pas depuis un argument ni une variable `.env`. Le mot de passe doit contenir 16 à 128 caractères. Exemple de saisie sans écho :
+
+```bash
+read -rsp 'Mot de passe initial : ' VOIX_PASSWORD; printf '\n'
+printf '%s\n' "$VOIX_PASSWORD" | npm run admin -w @voix-alumni/api -- provision --email=responsable@example.org --name='Responsable' --role=RESPONSABLE
+unset VOIX_PASSWORD
+```
+
+Répéter avec `--role=PRODUCTION` pour le second compte. Si les comptes locaux de démonstration occupent déjà ces rôles, les révoquer d’abord avec la commande privée `revoke` ; leur historique reste conservé. `reset --email=…` prend un nouveau mot de passe par stdin, remplace le hash et supprime toutes les sessions du compte ; `revoke --email=…` désactive l’accès et supprime ses sessions. Chaque action est enregistrée dans `security_events`. Une seule identité active par rôle est permise en base. L’adresse et le nouveau secret doivent être remis par un canal privé vérifié ; aucun reset par email n’est configuré. Les deux comptes `example.invalid` présents localement servent uniquement à la recette visuelle, pas aux utilisatrices finales.
+
+## 5. Tests et captures
 
 ```bash
 npm run format:check
 npm run lint
 npm run typecheck
+npm run db:migrate:test -w @voix-alumni/db
 npm run test
 npm run build
 ```
 
-Au Lot 0 : 2 tests API de santé réussis ; lint, format, typecheck et build réussis. Un smoke HTTP distinct a vérifié `/api/health` et `/api/ready` avec PostgreSQL sain. L'inscription renvoie `404` parce que Better Auth **n'est pas encore monté**, et non parce qu'un système d'auth complet serait déjà sécurisé. La validation email/OAuth appartient au Lot 1.
+Les tests API requièrent une base **distincte** `voix_alumni_test` dans le même conteneur dédié. La créer une seule fois via `docker compose -f compose.dev.yml exec -T db sh -lc 'createdb -U "$POSTGRES_USER" voix_alumni_test'`, puis créer `.env.test` ignoré par Git avec `DATABASE_URL` pointant vers cette base. Les tests créent et retirent leurs propres identités éphémères. La CI crée automatiquement son PostgreSQL de test et fournit ses variables d’environnement.
 
-Le navigateur Chromium déjà présent sur l'hôte n'a pas pu démarrer pour un test visuel (`libnspr4.so` absente). Le test HTTP du proxy Vite et de l'API a réussi ; le rendu navigateur reste à vérifier dans un environnement de test équipé, sans installer de bibliothèque système sur le VPS partagé pour le seul Lot 0.
+La recette navigateur utilise l’image officielle `mcr.microsoft.com/playwright:v1.64.0-noble`, déjà présente localement ; aucune bibliothèque Chromium n’est installée sur l’hôte. Après démarrage API/web et création de deux comptes de démonstration, fournir à Playwright le chemin `E2E_CREDENTIALS_FILE` vers un JSON privé de forme `{ "RESPONSABLE": {"email":"…","password":"…"}, "PRODUCTION": {"email":"…","password":"…"} }`. Dans le conteneur Playwright, lancer `./node_modules/.bin/playwright test` sur le dépôt monté et le réseau hôte. Les captures anonymisées de recette sont sous `Docs/recette/lot-1/`. La passe finale du Lot 1 a réussi : 9 tests API et 8 parcours desktop/mobile ; une session avait été relue après redémarrage effectif de l’API lors de la recette précédente.
 
-## 5. Conventions et étapes futures
+## 6. Conventions et limites
 
-- TypeScript strict, ESLint et Prettier ; schémas/contrats partagés sans importer du code serveur dans le web.
-- Schéma Better Auth, table d'autorisation métier et migrations Drizzle versionnées à créer au Lot 1. Aucun `drizzle-kit push` en production.
-- Better Auth sera monté dans Hono sous `/api/auth/*`, avec création publique email et OAuth fermée, liaison Google explicite et bootstrap administratif privé. Les deux rôles sont contrôlés côté serveur.
-- R2 : deux buckets privés séparés avec restriction de juridiction `eu`, point d'accès S3 UE, permissions minimales et URLs signées après contrôle. Le port `PrivateObjectStore` permet de remplacer R2. Aucune ressource Cloudflare créée au Lot 0.
-- Affiches : étudier d'abord le rendu côté navigateur et mesurer fidélité/coût avant Chromium serveur. Préserver la maquette et ses jetons visuels.
-- Feedback : réponses anonymes par défaut, rétention configurable, suppression individuelle, agrégats réellement anonymisés. Modéliser séparément les consentements portrait/enregistrement/replay.
-- Fuseaux UTC + IANA ; l'heure réelle du 25/10/2026 reste à confirmer.
+TypeScript strict, ESLint, Prettier, schémas et migrations versionnés. L’inscription publique email et Google est fermée ; Google doit d’abord être lié explicitement depuis les paramètres d’un compte préautorisé. Un `403` provient du serveur, même si l’UI affiche une rubrique. Les données de la maquette ne sont jamais chargées dans la base. R2, épisodes, studio, feedback et publication manuelle restent dans leurs lots prévus. L’heure réelle du 25 octobre 2026 demeure à confirmer.
+
+Avant tout déploiement, vérifier HTTPS/Caddy, cookies et origines de confiance, callback Google réel, propagation sûre de l’IP cliente au limiteur Better Auth, sauvegardes et ressources. Aucun de ces changements de production n’est autorisé par le Lot 1.
 
 Références : [architecture](07_ARCHITECTURE_TECHNIQUE.md) · [lots](12_PLAN_IMPLEMENTATION.md) · [infra](16_DEPLOIEMENT_ET_ENVIRONNEMENTS.md).
+
+**Audit des dépendances au 21/10/2026 :** `npm audit` signale 4 avis modérés formant une seule chaîne : `drizzle-kit@0.31.11` → `@esbuild-kit/esm-loader@2.6.5` → `@esbuild-kit/core-utils@3.3.2` → `esbuild@0.18.20`. L’avis source [GHSA-67mh-4wv8-2f99](https://github.com/advisories/GHSA-67mh-4wv8-2f99) concerne le serveur de développement `serve` d’esbuild ≤0.24.2 et ses en-têtes CORS ; les versions esbuild utilisées par Vite/tsx sont ≥0.25. L’API Hono en exécution n’utilise pas ce serveur esbuild : la portée pratique actuelle concerne l’outillage de schéma/développement, sous réserve de vérification du paquet réellement livré en production. `npm audit --omit=dev` conserve ces quatre avis dans ce monorepo à cause du peer optionnel `drizzle-kit` de Better Auth ; ce résultat ne prouve pas une exploitation par l’API. `npm audit fix` propose un retour majeur vers `drizzle-kit@0.18.1`, incompatible avec le peer requis par Better Auth (≥0.31.4). Ne pas appliquer ce correctif automatiquement ; surveiller une version Drizzle Kit corrigeant la chaîne, tester une substitution ciblée après publication ou exclure les outils de développement de l’image d’exécution avec vérification de l’image finale.

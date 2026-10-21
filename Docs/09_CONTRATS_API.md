@@ -9,7 +9,7 @@
 
 Base métier proposée `/api/v1`, servie par Hono. Better Auth est monté **dans le même backend** sous `/api/auth/*` avant les routes métier ; ses endpoints et schémas sont ceux de la version épinglée, sans réimplémentation maison de login/logout. HTTPS en production, même origine via Caddy, JSON UTF-8 ; cookie de session et protection CSRF/origine. Réponses paginées, `request_id` en erreurs, dates ISO 8601 UTC, zones IANA explicites. **Les routes sont des contrats à implémenter**, pas une affirmation qu'elles existent.
 
-Socle Lot 0 effectivement présent : `GET /api/health` renvoie l'état du processus et `GET /api/ready` vérifie PostgreSQL. Les routes Better Auth et métier ci-dessous restent des contrats pour les lots suivants ; un `404` sur inscription au Lot 0 ne constitue pas encore la preuve que l'inscription Better Auth sera fermée.
+Lot 1 effectivement présent : `GET /api/health`, `GET /api/ready`, `GET /api/capabilities`, `/api/auth/*` Better Auth, `GET /api/v1/me`, `GET /api/v1/dashboard` et les routes de rôle `GET /api/v1/responsable/overview`, `GET /api/v1/production/overview`. Le tableau de bord retourne `status: "empty", items: []` tant qu’aucune donnée métier n’existe. Les autres routes de ce document restent des contrats futurs. Tout POST Better Auth exige l’origine exacte configurée.
 
 Création publique interdite : email/mot de passe avec `disableSignUp`, Google OAuth avec `disableSignUp`, plus contrôle serveur de l'identité autorisée et active. Le callback OAuth d'un compte non autorisé ne doit ni créer d'identité métier ni ouvrir une session utilisable. Les routes publiques de feedback sont distinctes et limitées ; elles n'accordent jamais une session organisateur.
 
@@ -34,7 +34,9 @@ Codes : `400` mauvais format, `401` non connecté, `403` interdit, `404` hors p�
 |---|---|---|
 | `/api/auth/*` | sessions, email/mot de passe, Google OAuth via Better Auth intégré | comptes préautorisés ; inscription publique refusée |
 | `GET /api/v1/me` | identité, rôle et autorisation métier courants | authentifié et actif |
-| `GET /dashboard?role_context=...` | état partagé filtré selon rôle réel | deux rôles |
+| `GET /api/v1/dashboard` | vue vide véridique du rôle courant | authentifié et actif |
+| `GET /api/v1/responsable/overview`, `GET /api/v1/production/overview` | routes de rôle, données vides | rôle correspondant uniquement |
+| `GET /dashboard?role_context=...` | ancien contrat illustratif ; remplacé au Lot 1 par `GET /api/v1/dashboard` | ne pas implémenter |
 | `GET /alumni` | liste, filtres, recherche | deux rôles |
 | `POST /alumni` | fiche brouillon | deux rôles selon droits |
 | `GET /alumni/{id}` | fiche + épisodes liés | deux rôles |
@@ -171,3 +173,5 @@ V1 utilise R2 derrière un port de stockage indépendant du fournisseur : `uploa
 - Pas de compatibilité inventée avec Graph/WhatsApp/YouTube avant étude des scopes et comptes réellement autorisés.
 
 Références : [données](08_MODELE_DE_DONNEES.md) · [workflow](02_WORKFLOWS_ET_REGLES_METIER.md) · [sécurité](13_SECURITE_ET_CONFIDENTIALITE.md).
+
+Les réponses Lot 1 `me` et `dashboard` sont validées par les mêmes schémas Zod exportés depuis `packages/contracts` dans l’API et dans React.

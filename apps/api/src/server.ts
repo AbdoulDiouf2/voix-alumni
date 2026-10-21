@@ -1,5 +1,8 @@
 import { serve } from "@hono/node-server";
-import { app } from "./app.js";
+import { createApp } from "./app.js";
+import { auth, database } from "./auth.js";
+
+const app = createApp({ auth, database });
 
 const port = Number(process.env.API_PORT ?? 8787);
 const hostname = process.env.API_HOST ?? "127.0.0.1";

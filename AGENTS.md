@@ -2,6 +2,14 @@
 
 > **À lire avant tout changement de code** dans le dépôt Voix d’Alumni. Contrat de travail initial ; ne remplace pas les instructions directes du propriétaire du projet.
 
+## Traçabilité obligatoire à chaque intervention
+
+1. **Avant d'agir**, lire `Docs/PROJECT_STATUS.md` et les dernières entrées de `Docs/DEV_JOURNAL.md`, puis vérifier la branche, le HEAD et l'arbre de travail. Consulter `Docs/DECISIONS.md` et les documents métier concernés. Cette règle vaut pour tous les lots et après tout changement d'agent.
+2. **Après chaque tâche significative, correction importante, incident, blocage ou rollback**, ajouter une entrée chronologique à `Docs/DEV_JOURNAL.md`. Ne jamais supprimer ni réécrire une entrée historique ; consigner les tentatives et échecs même après correction, ainsi que la raison d'une annulation. Ajouter obligatoirement l'entrée de l'intervention avant la réponse finale.
+3. **Avant de terminer l'intervention**, actualiser `Docs/PROJECT_STATUS.md` avec l'état réellement observé, les tests, le Git et la prochaine action. Actualiser `Docs/DECISIONS.md` dès l'approbation d'une décision structurante ; conserver les décisions remplacées et l'identifiant de leur successeur.
+4. Vérifier la cohérence du journal et du statut avec le code, les résultats de tests, les documents métier et l'état Git. Distinguer **vérifié**, **issu d'un rapport antérieur** et **non vérifié**. Ne jamais transformer une supposition en fait observé.
+5. Ne déclarer aucune tâche « terminée » si cette traçabilité n'est pas à jour. Ne consigner aucun secret, mot de passe, token, donnée personnelle sensible ni journal confidentiel. Le contrôle CI du journal est un filet de sécurité ; il ne remplace pas cette vérification humaine.
+
 ## Mission et contexte métier non négociable
 
 - Construire **Voix d'Alumni Studio**, une petite application interne exploitable par **deux organisateurs** pour planifier, préparer, animer et archiver les épisodes.
@@ -38,7 +46,7 @@
 
 ## Processus de travail par lot
 
-1. **Lire** `README.md`, `Docs/01`, `Docs/02`, `Docs/03`, `Docs/04`, `Docs/05`, `Docs/12`, puis les documents pertinents au lot.
+1. **Lire** les trois registres de suivi selon la règle ci-dessus, `README.md`, `Docs/01`, `Docs/02`, `Docs/03`, `Docs/04`, `Docs/05`, `Docs/12`, puis les documents pertinents au lot.
 2. **Faire un plan court** : périmètre, fichiers impactés, migrations, risques, tests et éventuelles décisions humaines.
 3. **Implémenter la tranche verticale** (UI + API + données + sécurité + tests), sans abstractions futures inutiles.
 4. **Tester** : unitaires, intégration, E2E desktop/mobile, a11y basique, contrôles RBAC et autres exigences ciblées.
@@ -53,7 +61,7 @@
 - Chaque tâche/modification métier conserve auteur et horodatage ; publications explicitement constatées, jamais inférées d'un copier-coller.
 - Contrôle de données et consentements pour médias ; captures/fixtures de démo séparées des vraies données.
 - Compatible mobile, clavier, focus ; erreurs/états vide/loading/permission gérés.
-- Migration réversible ou sauvegardée ; tests automatisés passés ; documentation et journal de décisions à jour.
+- Migration réversible ou sauvegardée ; tests automatisés passés ; documentation, journal d'intervention, statut courant et registre des décisions à jour.
 
 ## Questions nécessitant validation humaine (ne pas figer silencieusement)
 
@@ -82,4 +90,5 @@ Prochaine porte : validation demandée — ne pas poursuivre automatiquement
 - Design : `Docs/05_DESIGN_SYSTEM_ET_UX.md`, maquette HTML inchangée.
 - Contrats : `Docs/08_MODELE_DE_DONNEES.md`, `Docs/09_CONTRATS_API.md`.
 - Ordonnancement : `Docs/12_PLAN_IMPLEMENTATION.md`.
+- Suivi permanent : `Docs/PROJECT_STATUS.md`, `Docs/DEV_JOURNAL.md`, `Docs/DECISIONS.md`.
 - Tests, exploitation, lancement : `Docs/14`, `Docs/16`, `Docs/17`, `Docs/19`.

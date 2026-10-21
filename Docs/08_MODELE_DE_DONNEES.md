@@ -16,16 +16,18 @@
 
 ### Identités Better Auth et `organizer_memberships`
 
-Better Auth détient ses tables `user`, `session`, `account` et `verification`, générées selon la version épinglée puis intégrées aux migrations Drizzle. Ne pas créer une seconde table de comptes avec mots de passe concurrents. `organizer_memberships` est une table métier distincte, provisionnée en privé ; une session Better Auth ne suffit pas à autoriser l'accès aux dossiers.
+Better Auth détient ses tables `user`, `session`, `account` et `verification`, générées avec `auth@1.7.12` puis intégrées aux migrations Drizzle du Lot 1. Ne pas créer une seconde table de comptes avec mots de passe concurrents. `organizer_memberships` est une table métier distincte, provisionnée en privé ; une session Better Auth ne suffit pas à autoriser l'accès aux dossiers.
 
 | Champ | Type | Contraintes |
 |---|---|---|
 | `user_id` | ID Better Auth | PK/FK vers `user.id` ; ne pas supposer UUID sans configuration explicite |
 | `role` | enum métier | `RESPONSABLE`, `PRODUCTION`, attribué seulement par bootstrap privé |
-| `active`, `authorized_at`, `revoked_at` | bool/timestamptz | vérifiés côté Hono à chaque accès protégé |
-| `authorized_by`, `provisioning_ref` | ID/note | audit du provisionnement |
+| `active`, `created_at` | bool/timestamp | schéma Lot 1 ; `active` est vérifié côté Hono et avant création d’une session |
 
-Email, identité Google et hash du mot de passe relèvent des tables Better Auth. La liste des personnes autorisées doit précéder leur première connexion ; une adresse Google vérifiée ne crée pas une autorisation métier. Le schéma exact de Better Auth est figé avec la version installée et revu avant migration.
+
+`security_events` est une table séparée (`id`, `user_id`, `action`, `occurred_at`) pour les actions de compte et de session, sans mot de passe ni jeton.
+
+Email, identité Google et hash du mot de passe relèvent des tables Better Auth. La liste des personnes autorisées doit précéder leur première connexion ; une adresse Google vérifiée ne crée pas une autorisation métier. Le schéma exact de Better Auth est figé avec la version installée et les migrations `0000` à `0002`. PostgreSQL interdit un troisième rôle et deux comptes actifs pour un même rôle. Les champs `authorized_at`, `revoked_at`, `authorized_by` et `provisioning_ref` restent des extensions proposées, absentes du schéma Lot 1.
 
 ### `alumni`
 

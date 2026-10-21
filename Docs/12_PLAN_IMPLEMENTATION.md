@@ -1,6 +1,6 @@
 # 12 — Plan d’implémentation par lots, portes et livrables
 
-> **Projet :** Voix d’Alumni Studio · **Édition :** 21 octobre 2026 · **Statut :** Spécification initiale à valider lors du lot 0
+> **Projet :** Voix d’Alumni Studio · **Édition :** 21 octobre 2026 · **Statut :** Lot 0 accepté ; Lot 1 autorisé et implémenté localement, validation visuelle attendue
 > **Objet :** Orchestrer le développement de l’audit jusqu’à la première session officielle.
 > **Référence UX :** `Docs/voix_alumni_studio_prototype.html` (maquette de démonstration validée ; ne pas la modifier automatiquement).
 
@@ -26,7 +26,8 @@
 **Travaux :** base PostgreSQL isolée, migrations Drizzle et Better Auth, provisionnement privé de deux comptes autorisés, email/mot de passe et Google OAuth sans inscription publique, login/logout/recovery, shell desktop/mobile fidèle à la maquette, navigation, logs/audit, endpoints santé.
 **Scénario :** Responsable connectée voit tableau de bord vide ; Production connectée voit sa vue ; visiteur anonyme est bloqué.
 **Tests :** refus des inscriptions email et OAuth, liaison Google sûre, compte révoqué, 401/403, CSRF/cookies, browser mobile/desktop, persistance après redémarrage.
-**Porte :** interface validée sans données factices dans environnement réel.
+**État local au 21/10/2026 :** migration Drizzle/Better Auth, CLI administrative, sessions, RBAC, shell et vues vides, tests API et Playwright desktop/mobile. Google réel non testé faute d’identifiants, comptes de démonstration fictifs, pas de production.
+**Porte :** validation visuelle et fonctionnelle du Lot 1 par le propriétaire avant tout Lot 2.
 
 ## Lot 2 — Vivier, profils et épisodes
 

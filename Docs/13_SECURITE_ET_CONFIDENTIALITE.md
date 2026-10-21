@@ -16,7 +16,7 @@ L'application gère des données identifiantes : noms/promotion/postes/photos d'
 - Pas d'identifiants de démo, `admin/admin`, création de rôle par l'utilisateur, accès public aux dossiers ou « RoleSwitch » escaladant les droits. La seule exception publique V1 est le formulaire de feedback publié, limité par jeton et sans session organisateur.
 - Tester permissions **backend** et l'accès aux médias via URL, pas uniquement l'interface.
 - Tester OAuth Google avec email non autorisé, non vérifié, compte révoqué et liaison à une identité préexistante ; un domaine Google accepté ne remplace pas l'autorisation nominative. Ne jamais configurer une liaison forcée d'identités non vérifiées.
-- Désactiver la liaison Google implicite ; lier Google explicitement depuis une session d'un compte préalablement autorisé. La récupération d'accès utilisera un jeton unique, court et révocable livré par un canal vérifié, ou une procédure administrative privée tracée. Ne pas activer de reset par email avant validation du fournisseur et du destinataire.
+- Désactiver la liaison Google implicite ; lier Google explicitement depuis une session d'un compte préalablement autorisé. Au Lot 1, la récupération est une commande administrative privée tracée : nouveau mot de passe fourni par stdin, hash Better Auth et suppression de toutes les sessions. Le canal de remise au propriétaire reste à valider ; aucun reset par email automatique n’est activé.
 
 ## 3. RBAC minimal
 
@@ -76,3 +76,7 @@ Les événements importants doivent garder **qui / quand / quoi** sans enregistr
 En cas de fuite présumée, suspendre les accès/jetons touchés sans supprimer les preuves techniques, préserver journaux et inventaire, évaluer impact et obligations de notification avec responsable concerné, documenter remédiation. En cas d'accès public accidentel à un fichier privé, invalider URLs signées, corriger politique d'accès, effectuer revue des autres médias. Voir `17_EXPLOITATION_ET_MAINTENANCE.md`.
 
 Références : [rôles](04_ROLES_ET_PERMISSIONS.md) · [exploitation](17_EXPLOITATION_ET_MAINTENANCE.md).
+
+## État de sécurité Lot 1
+
+L’inscription email est fermée par Better Auth. Google, lorsqu’il sera configuré, interdit `disableSignUp` et `disableImplicitSignUp`, exige une liaison explicite et vérifie la présence d’un compte actif via `user.validateUserInfo` avant création/liaison/session. Le callback réel Google n’a pas pu être exercé sans identifiants OAuth. Hono refuse les POST `/api/auth/*` dont l’origine est absente ou différente de `BETTER_AUTH_URL` et bloque les sessions révoquées, y compris sur les routes Better Auth. L’adresse IP n’est pas encore transmise de façon fiable au limiteur Better Auth dans le montage local Vite/Hono ; la configuration du proxy de production et son test restent un préalable au déploiement. Les événements de sécurité ne contiennent ni mot de passe ni jeton.

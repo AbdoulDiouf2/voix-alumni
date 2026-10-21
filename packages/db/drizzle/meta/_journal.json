@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1792542372749,
+      "tag": "0000_smooth_lethal_legion",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792542921266,
+      "tag": "0001_petite_lifeguard",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792543084161,
+      "tag": "0002_small_queen_noir",
+      "breakpoints": true
+    }
+  ]
+}

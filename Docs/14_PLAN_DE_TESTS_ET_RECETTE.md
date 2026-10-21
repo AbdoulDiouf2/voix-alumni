@@ -106,3 +106,9 @@ Go/No-Go proposé : ...
 ```
 
 Références : [spécifications](03_SPECIFICATIONS_FONCTIONNELLES.md) · [lots](12_PLAN_IMPLEMENTATION.md) · [go-live](19_RECETTE_FINALE_ET_GO_LIVE.md).
+
+## Recette exécutée au Lot 1 (21 octobre 2026)
+
+- API sur `voix_alumni_test` isolée : 8 tests réussis couvrant santé, session, inscription email refusée, garde OAuth sur identité inconnue, rôles 401/403, révocation, origine CSRF, déconnexion et rôle forgé. Le flux de rappel Google réel reste non testé sans identifiants.
+- Playwright 1.64.0 dans `mcr.microsoft.com/playwright:v1.64.0-noble` : 6 parcours réussis (connexion, navigation, état vide, déconnexion, desktop/mobile), sans bibliothèques Chromium ajoutées au VPS. Captures anonymisées sous `Docs/recette/lot-1/`.
+- Procédure de récupération privée exercée sur un compte de démonstration : ancien mot de passe refusé, nouveau accepté, ancienne session révoquée. Session Better Auth conservée après redémarrage effectif du processus API. Les données affichées par le tableau de bord sont vides et proviennent de l’API, sans fixture métier.

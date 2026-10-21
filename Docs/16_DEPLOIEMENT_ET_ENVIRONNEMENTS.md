@@ -23,7 +23,7 @@ Contraintes non négociables de ce document : ports publics seulement 80/443 pou
 
 ## 3. Architecture Compose cible indicative
 
-Le monolithe modulaire Node.js/Hono héberge **également Better Auth** ; aucun conteneur d’auth séparé. Le build statique Vite est servi derrière Caddy ; l’API et PostgreSQL restent privés. Les médias sont dans deux buckets Cloudflare R2 privés distincts, créés sous restriction de juridiction `eu` et accessibles par l'API S3 juridictionnelle. Les métadonnées restent en PostgreSQL ; aucune vidéo originale volumineuse sur le VPS. Aucun bucket, identifiant Cloudflare ou build d'image applicative au Lot 0.
+Le monolithe modulaire Node.js/Hono héberge **également Better Auth** ; aucun conteneur d’auth séparé. Le build statique Vite est servi derrière Caddy ; l’API et PostgreSQL restent privés. Les médias sont dans deux buckets Cloudflare R2 privés distincts, créés sous restriction de juridiction `eu` et accessibles par l'API S3 juridictionnelle. Les métadonnées restent en PostgreSQL ; aucune vidéo originale volumineuse sur le VPS. Aucun bucket, identifiant Cloudflare ou build d'image applicative aux Lots 0–1.
 
 ```yaml
 # Schéma illustratif, NON déployable tel quel sans décisions sur images/secrets/sauvegardes
@@ -92,3 +92,7 @@ Le web ne doit pas rejoindre le réseau DB. Le worker éventuel est connecté au
 [ ] domaine approuvé [ ] DNS correct [ ] TLS [ ] Caddy validé [ ] Better Auth intégré et inscriptions email/OAuth fermées [ ] DB privée [ ] buckets R2 privés dev/prod sous juridiction UE [ ] secrets hors Git [ ] images pinned [ ] backup DB + copie média indépendante/restauration vérifiés [ ] migration testée [ ] rollback praticable [ ] health ready [ ] aucun service voisin modifié [ ] logs sans PII [ ] comptes binôme opérationnels [ ] feedback public limité [ ] test 25/10/2026 confirmé [ ] approbation humaine écrite.
 
 Références : [architecture](07_ARCHITECTURE_TECHNIQUE.md) · [sécurité](13_SECURITE_ET_CONFIDENTIALITE.md) · [exploitation](17_EXPLOITATION_ET_MAINTENANCE.md).
+
+## État après Lot 1
+
+Seul le PostgreSQL de développement Voix d’Alumni est démarré sur `127.0.0.1:55432`; une base `voix_alumni_test` distincte héberge les tests. Les serveurs Node/Vite tournent localement sur `127.0.0.1:8787` et `127.0.0.1:5173` pour la recette. Aucun déploiement, changement Caddy/DNS, conteneur applicatif ou bucket R2 n’a été créé. Avant déploiement, vérifier l’origine HTTPS, les cookies, le callback Google et la propagation fiable de l’IP cliente au limiteur Better Auth via le proxy de confiance.

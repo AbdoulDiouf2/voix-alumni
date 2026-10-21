@@ -15,13 +15,16 @@
     "dev:web": "npm run dev -w @voix-alumni/web",
     "build": "npm run build -w @voix-alumni/contracts && npm run build -w @voix-alumni/db && npm run build -w @voix-alumni/api && npm run build -w @voix-alumni/web",
     "typecheck": "npm run build -w @voix-alumni/contracts && npm run build -w @voix-alumni/db && npm run typecheck -w @voix-alumni/api && npm run typecheck -w @voix-alumni/web",
-    "lint": "eslint apps packages",
-    "format:check": "prettier --check 'apps/**/*.{ts,tsx,css,json,html}' 'packages/**/*.{ts,json}' package.json eslint.config.mjs",
-    "test": "npm run build -w @voix-alumni/contracts && npm run build -w @voix-alumni/db && npm run test -w @voix-alumni/api"
+    "lint": "eslint apps packages e2e playwright.config.ts",
+    "format:check": "prettier --check 'apps/**/*.{ts,tsx,css,json,html}' 'packages/**/*.{ts,json}' 'e2e/**/*.ts' playwright.config.ts package.json eslint.config.mjs",
+    "test": "npm run build -w @voix-alumni/contracts && npm run build -w @voix-alumni/db && npm run test -w @voix-alumni/api",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.64.0",
     "@types/node": "24.19.2",
+    "auth": "1.7.12",
     "eslint": "10.13.0",
     "prettier": "3.9.10",
     "typescript": "5.9.3",
