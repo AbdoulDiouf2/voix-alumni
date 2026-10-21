@@ -43,6 +43,7 @@
 **Scénario :** Production demande « confirmer l'intitulé exact », Responsable répond, Production résout et poursuit.
 **Tests :** 403 contact externe, tâches versionnées, pas de succès localStorage, conflit 409, report dates.
 **Porte :** parcours complet simulé à deux avec statut métier exact.
+**État local au 21/10/2026 :** parcours, demandes, historique, validations d'étapes et notifications internes implémentés et testés sur base isolée ; validation du propriétaire attendue. Les actions métier de publication, tenue de session et replay restent réservées aux Lots 4–5.
 
 ## Lot 4 — Communications et créations
 

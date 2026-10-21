@@ -9,6 +9,7 @@ import { desc, eq, isNotNull } from "drizzle-orm";
 import { Hono } from "hono";
 import type { auth as authInstance } from "./auth.js";
 import { registerLot2Routes, type BusinessEnv } from "./lot2.js";
+import { registerLot3Routes } from "./lot3.js";
 
 type Dependencies = {
   auth: typeof authInstance;
@@ -125,6 +126,7 @@ export function createApp({ auth, database }: Dependencies) {
   );
 
   registerLot2Routes(app, database);
+  registerLot3Routes(app, database);
 
   return app;
 }
