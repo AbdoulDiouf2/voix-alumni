@@ -19,7 +19,8 @@
     "build": "tsc -p tsconfig.json",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --env-file=../../.env ../../node_modules/drizzle-kit/bin.cjs migrate",
-    "db:migrate:test": "node --env-file-if-exists=../../.env.test ../../node_modules/drizzle-kit/bin.cjs migrate"
+    "db:migrate:test": "node --env-file-if-exists=../../.env.test ../../node_modules/drizzle-kit/bin.cjs migrate",
+    "db:migrate:e2e": "node --env-file=../../.env.e2e ../../node_modules/drizzle-kit/bin.cjs migrate"
   },
   "dependencies": {
     "drizzle-orm": "0.45.4",

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  dashboardSchema,
   organizerSchema,
   type Organizer,
   type OrganizerRole,
 } from "@voix-alumni/contracts";
 import {
   BrowserRouter,
+  Link,
   Navigate,
   NavLink,
   Route,
@@ -35,6 +35,16 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AlumniList,
+  AlumniForm,
+  AlumniPage,
+  EpisodeList,
+  EpisodeNew,
+  EpisodePage,
+  ProductionInbox,
+  type Episode,
+} from "./Lot2";
 
 type Role = OrganizerRole;
 type NavItem = { label: string; path: string; icon: LucideIcon; lot: number };
@@ -272,20 +282,20 @@ function PageHeader({
 function Dashboard({ organizer }: { organizer: Organizer }) {
   const isResponsible = organizer.role === "RESPONSABLE";
   const firstName = organizer.name.trim().split(/\s+/)[0];
-  const [state, setState] = useState<"loading" | "empty" | "error">("loading");
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const [episodes, setEpisodes] = useState<Episode[]>([]);
   useEffect(() => {
     let active = true;
-    fetch("/api/v1/dashboard", { credentials: "include" })
+    fetch(`/api/v1/episodes${isResponsible ? "" : "?inbox=true"}`, {
+      credentials: "include",
+    })
       .then(async (response) => {
         if (!response.ok) throw new Error();
-        const data = dashboardSchema.parse(await response.json());
-        if (
-          data.role !== organizer.role ||
-          data.status !== "empty" ||
-          data.items.length
-        )
-          throw new Error();
-        if (active) setState("empty");
+        const data = (await response.json()) as { items: Episode[] };
+        if (active) {
+          setEpisodes(data.items);
+          setState("ready");
+        }
       })
       .catch(() => {
         if (active) setState("error");
@@ -293,7 +303,7 @@ function Dashboard({ organizer }: { organizer: Organizer }) {
     return () => {
       active = false;
     };
-  }, [organizer.role]);
+  }, [isResponsible]);
   return (
     <>
       <PageHeader
@@ -305,10 +315,11 @@ function Dashboard({ organizer }: { organizer: Organizer }) {
             : "Votre espace de préparation des épisodes et des contenus."
         }
       />
+      {organizer.role === "PRODUCTION" && <ProductionInbox />}
       <div className="dashboard-grid">
         <section className="hero-card card">
           <div className="hero-copy">
-            <span className="badge">Lot 1 · Espace prêt</span>
+            <span className="badge">Lot 2 · Dossiers réels</span>
             <h2>
               {isResponsible
                 ? "Chaque rencontre commence ici."
@@ -316,8 +327,8 @@ function Dashboard({ organizer }: { organizer: Organizer }) {
             </h2>
             <p>
               {isResponsible
-                ? "Les intervenants et épisodes apparaîtront ici après leur création dans le prochain lot."
-                : "Les épisodes transmis et les tâches de production apparaîtront ici dans les prochains lots."}
+                ? "Retrouvez les intervenants du vivier et les épisodes réellement enregistrés."
+                : "Les dossiers transmis par la Responsable apparaissent dans votre espace."}
             </p>
           </div>
           <div className="hero-art" aria-hidden="true">
@@ -341,7 +352,9 @@ function Dashboard({ organizer }: { organizer: Organizer }) {
             <h2>
               {isResponsible ? "Épisodes à suivre" : "Production à préparer"}
             </h2>
-            <span className="badge gray">Aucune donnée</span>
+            <span className="badge gray">
+              {episodes.length} dossier{episodes.length > 1 ? "s" : ""}
+            </span>
           </div>
           {state === "loading" ? (
             <div role="status" className="skeleton-list">
@@ -353,10 +366,35 @@ function Dashboard({ organizer }: { organizer: Organizer }) {
               title="Chargement impossible"
               text="Le tableau de bord n’a pas pu être chargé. Rechargez la page."
             />
+          ) : episodes.length ? (
+            <div className="lot2-dashboard-links">
+              {episodes.slice(0, 4).map((episode) => (
+                <Link
+                  key={episode.id}
+                  to={`/episodes/${episode.id}`}
+                  className="lot2-related"
+                >
+                  <span>
+                    {episode.alumni_name ?? "Intervenant"}
+                    <small>
+                      {episode.public_number
+                        ? `Épisode n° ${episode.public_number}`
+                        : "Dossier d’épisode"}{" "}
+                      · {episode.status.replaceAll("_", " ")}
+                    </small>
+                  </span>
+                  <ArrowRight size={16} />
+                </Link>
+              ))}
+            </div>
           ) : (
             <EmptyState
               title="Aucun épisode pour le moment"
-              text="La création et le suivi des épisodes seront disponibles au Lot 2."
+              text={
+                isResponsible
+                  ? "Créez un épisode depuis une fiche du vivier."
+                  : "Aucun dossier transmis par la Responsable."
+              }
               icon={CalendarDays}
             />
           )}
@@ -391,22 +429,6 @@ const placeholders: Record<
     icon: LucideIcon;
   }
 > = {
-  "/episodes": {
-    eyebrow: "Programme",
-    title: "Épisodes",
-    subtitle: "Toutes les rencontres Voix d’Alumni au même endroit.",
-    empty: "Aucun épisode enregistré. La gestion des épisodes arrive au Lot 2.",
-    lot: 2,
-    icon: CalendarDays,
-  },
-  "/intervenants": {
-    eyebrow: "Réseau alumni",
-    title: "Intervenants",
-    subtitle: "Le vivier et les profils de vos invités.",
-    empty: "Aucun intervenant enregistré. Le vivier sera disponible au Lot 2.",
-    lot: 2,
-    icon: Users,
-  },
   "/studio": {
     eyebrow: "Création",
     title: "Studio créatif",
@@ -550,7 +572,11 @@ function AppShell({
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const current =
-    navigation.find((item) => item.path === location.pathname) ?? navigation[0];
+    navigation.find(
+      (item) =>
+        item.path === location.pathname ||
+        (item.path !== "/" && location.pathname.startsWith(`${item.path}/`)),
+    ) ?? navigation[0];
   useEffect(() => setMenuOpen(false), [location.pathname]);
   return (
     <div className="app-shell">
@@ -598,6 +624,31 @@ function AppShell({
         <main className="content">
           <Routes>
             <Route path="/" element={<Dashboard organizer={organizer} />} />
+            <Route path="/intervenants" element={<AlumniList />} />
+            <Route
+              path="/intervenants/nouveau"
+              element={<AlumniForm organizer={organizer} />}
+            />
+            <Route
+              path="/intervenants/:id/modifier"
+              element={<AlumniForm organizer={organizer} />}
+            />
+            <Route
+              path="/intervenants/:id"
+              element={<AlumniPage organizer={organizer} />}
+            />
+            <Route
+              path="/episodes"
+              element={<EpisodeList organizer={organizer} />}
+            />
+            <Route
+              path="/episodes/nouveau"
+              element={<EpisodeNew organizer={organizer} />}
+            />
+            <Route
+              path="/episodes/:id"
+              element={<EpisodePage organizer={organizer} />}
+            />
             <Route
               path="/parametres"
               element={

@@ -1,37 +1,36 @@
 # État courant du projet — Voix d'Alumni Studio
 
-> **Dernière actualisation :** 2026-10-21 01:06 UTC, après contrôle du commit local de clôture du Lot 1.
-> **Preuves :** « vérifié » désigne un contrôle de cette intervention ; « rapport antérieur » désigne une observation non rejouée ici ; « à confirmer » n'est pas un fait observé.
+> **Dernière actualisation :** 2026-10-21 12:46 Europe/Paris. Les résultats ci-dessous sont des observations locales ; la CI distante et la production ne sont pas vérifiées.
 
 ## Lot, phase et Git
 
-- **Lot actuel :** Lot 1, finition implémentée et recette locale réussie ; l'orientation visuelle a été validée par le propriétaire. La clôture locale est autorisée après contrôles finaux. **Lot 2 non autorisé.**
-- **Branche :** `feat/lot-1-auth-shell`. **Dernier commit :** `HEAD` sur cette branche, commit local de clôture du Lot 1 (parent `4a14442` ; consulter `git rev-parse HEAD` pour son SHA après amendement). Aucun push.
-- **Arbre de travail :** propre lors du contrôle du commit amendé ; revérifier après le dernier amendement documentaire. Maquette HTML intacte, SHA-256 vérifié `5c65b156ca85f517b9328b8843e16739602371bdf3bb0d80b89bf1a6cc3e1b5c`.
+- **Lot actuel :** Lot 2 — finition et clôture locale autorisée. Lot 1 validé par le propriétaire sur `567c938`. **Lot 3 non autorisé.**
+- **Branche :** `feat/lot-2-alumni-episodes`. Base distante validée synchronisée localement par fast-forward avec `origin/main=c7fb575` (même arbre que le Lot 1 validé). À la clôture locale, le dernier commit connu est `HEAD` sur cette branche, de parent `c7fb575` ; son SHA exact figure dans le rapport final. Aucun push, PR, merge distant ou déploiement.
+- **Périmètre :** seul le dépôt Voix d'Alumni est modifié. La maquette HTML est inchangée, SHA-256 vérifié `5c65b156ca85f517b9328b8843e16739602371bdf3bb0d80b89bf1a6cc3e1b5c`.
 
 ## Fonctionnalités terminées et vérifiées localement
 
-- **Lot 0 :** socle monorepo TypeScript et PostgreSQL isolé dans `4a14442`, rapport accepté par le propriétaire.
-- **Lot 1 :** Better Auth dans Hono, email/mot de passe, sessions, sortie de session, provisionnement et récupération privés, interdiction d'inscription publique, garde OAuth configurée, droits RESPONSABLE/PRODUCTION en base et vérifiés côté API. Les routes d'un autre rôle renvoient `403`, les sessions expirées/supprimées `401`, les comptes révoqués `403` ; 9 tests API réussis.
-- **Interface :** shell React et deux tableaux de bord vides, navigation desktop/mobile. Connexion mobile raccourcie ; à la taille mobile Playwright, le champ de mot de passe apparaît dans la hauteur initiale. Accueil saluant le premier élément du nom d'affichage ; repli « Bonjour à vous » testé. Badge de rôle conservé. Huit parcours Playwright réussis et huit captures de recette actualisées sous `Docs/recette/lot-1/`.
-- **Traçabilité :** trois registres et garde-fou CI du journal préparés ; changements techniques sans nouvelle entrée datée refusés dans les scénarios locaux antérieurs. Le premier contrôle du commit a échoué à tort sous `pipefail` ; cause et correction conservées dans le journal. Le script corrigé passe contre `4a14442` sur le commit amendé ; une dernière vérification du SHA final suit l'actualisation documentaire.
+- **Lots 0–1 :** socle TypeScript/PostgreSQL et authentification Better Auth dans Hono, rôles RESPONSABLE/PRODUCTION, inscription fermée, interface responsive. Les parcours navigateur du Lot 1 repassent dans la recette finale.
+- **Vivier Lot 2 :** fiches potentielles sans épisode ; création, consultation, édition, archivage, recherche, filtres, tri et pagination ; suivi du contact réservé à la Responsable ; doublons signalés sans blocage ; audit des changements sans copie des notes privées.
+- **Épisodes Lot 2 :** plusieurs épisodes par intervenant ; dates envisagée/confirmée distinctes ; zones IANA et rejet des heures locales ambiguës ou inexistantes ; confirmation, report motivé, annulation motivée, historique et version de concurrence. Les épisodes réalisés ne disposent d'aucune mutation Lot 2. Numéros 1–11 réservés ; nouveau numéro à partir de 12 après confirmation.
+- **Relais :** transmission interne par la Responsable d'un épisode confirmé suffisamment renseigné ; notification Production et lecture du dossier après reconnexion. Un portrait manquant est signalé mais n'empêche pas le relais. Aucun envoi externe ni publication.
+- **Interface :** écrans desktop/mobile connectés à l'API et PostgreSQL ; dates visibles et saisies en `jj/mm/aaaa HH:mm`, offset et zone IANA dans les affichages ; libellés métier clarifiés ; espace mobile sous la navigation fixe vérifié sur les formulaires longs. Huit captures Lot 2 sont issues uniquement de la base E2E fictive.
 
 ## Tests, environnements et déploiements
 
-- **Vérifié dans cette intervention :** format, lint, typecheck, build et 9 tests API réussis sous Node 24 isolé ; 8 parcours Playwright desktop/mobile réussis dans l'image officielle déjà présente ; `git diff --check` réussi. Premier passage Prettier, deux passages Playwright et premier contrôle CI sur commit ont échoué avant corrections ; l'historique est conservé dans `DEV_JOURNAL.md`.
-- **Rapport antérieur :** maintien de session après redémarrage réel de l'API et exercice de réinitialisation privée ; ces contrôles manuels n'ont pas été rejoués ici.
-- **Local :** API et web ont répondu HTTP `200` pendant les contrôles ; base PostgreSQL dédiée au projet. Environ 8,6 Gio disponibles observés. Deux comptes fictifs `example.invalid` utilisent des prénoms fictifs pour les captures ; leurs secrets restent hors dépôt.
-- **Externe :** CI distante non exécutée ; aucun push, déploiement, bucket R2 ou modification de production dans cette intervention. L'état des applications voisines n'est pas déduit de ce dépôt.
+- **Dernière passe locale :** `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm run build` réussis après la dernière correction UI ; `npm run test` réussi avec 15 tests API ; Playwright dans l'image existante : 13 réussites, 1 test mobile ignoré sur desktop, zéro échec. Les scénarios A/B et les parcours Lot 1 sont couverts sur desktop/mobile. Garde CI local du journal réussi contre `c7fb575`, `git diff --check` et SHA de la maquette conformes.
+- **Isolation :** `voix_alumni_e2e` est la seule base visée par Playwright ; API 8877 et web 5174 dédiés. Le serveur et la recette refusent une cible non E2E. Une préparation vide uniquement cette base. Vérification locale : zéro fiche des scénarios automatisés dans `voix_alumni_dev`, quatre épisodes fictifs dans E2E après la recette, numéros confirmés 12–13. Les deux comptes de recette et leurs mots de passe restent privés hors Git.
+- **Environnement :** Node 24 isolé, PostgreSQL propre au projet ; environ 13 Gio disponibles au dernier contrôle après suppression automatique du conteneur Playwright jetable. Aucun bucket R2, image applicative, CI distante ou déploiement lancé. Aucun état des applications voisines n'est inféré.
 
-## Restant, blocages et risques
+## Blocages, problèmes connus et risques
 
-- **Google OAuth :** callback et liaison réels non testés de bout en bout sans identifiants, projet Google et URI approuvés ; le rejet du fournisseur non configuré et la garde d'identité sont testés localement. La fermeture de l'inscription OAuth en situation réelle reste à prouver.
-- **Dépendances :** 4 avis npm modérés sur une seule chaîne Drizzle Kit → esbuild ancien. L'avis source vise `esbuild serve` de développement. L'API Hono ne l'utilise pas à l'exécution, mais l'audit `--omit=dev` conserve l'avis à cause d'un peer optionnel ; vérifier la composition exacte de l'image avant production. Le correctif automatique proposé rétrograde Drizzle Kit sous la contrainte Better Auth ; non appliqué. Analyse dans `Docs/11_GUIDE_DEVELOPPEMENT.md`.
-- **Infrastructure :** proxy de confiance/IP du limiteur Better Auth, sauvegardes, R2 privé UE, ressources du VPS et restauration restent à traiter avant production. Ne toucher ni aux autres applications ni à leurs volumes.
-- **Métier :** heure réelle de la session du 25 octobre 2026 et droits médias/consentements restent à confirmer. Les fonctionnalités des Lots 2 et suivants ne sont pas commencées.
+- **Médias :** modèle et abstraction préparés ; aucun upload réel ni URL signée sans buckets R2 privés. Toute future publication utilisant un portrait devra vérifier les droits côté serveur (`DEC-010`).
+- **Historique :** épisodes 1–9 réalisés, 10 prochaine session, 11 planifiée ultérieurement selon la correction du propriétaire. Leur reprise réelle n'est pas faite ; rapprochement avec la source historique requis avant usage métier réel (`DEC-009`).
+- **Fonctions ultérieures :** demandes internes du Lot 3, publication, studio, feedback, média et clôture des épisodes hors Lot 2. Heure de la session du 25 octobre 2026 toujours à confirmer auprès de la Responsable.
+- **Sécurité/production :** callback Google OAuth réel non testé ; avis npm modérés transitifs analysés au Lot 1 ; proxy de confiance, sauvegardes, R2 et ressources VPS restent des préalables de production.
+- **Incident résolu :** une première exécution E2E isolée a subi une limitation Better Auth et généré des fichiers temporaires contenant les mots de passe fictifs ; ceux-ci ont été supprimés, les mots de passe tournés et les sessions révoquées. Limiteur désactivé uniquement en mode E2E avec garde de base exact. Voir le journal du 21 octobre.
 
-## Décisions et prochaine action
+## Décisions en attente et prochaine action
 
-- **Décisions approuvées :** `DEC-001` à `DEC-008` dans `Docs/DECISIONS.md`. Aucune nouvelle décision structurante n'a été approuvée pendant cette finition ; le registre n'a pas besoin d'une nouvelle entrée.
-- **À valider :** recette Google réelle avec comptes nominatifs autorisés, canal privé de remise des accès et futurs choix de production. La validation de l'orientation visuelle du Lot 1 est acquise ; elle ne vaut pas autorisation du Lot 2.
-- **Prochaine action concrète :** remettre au propriétaire le rapport final, le SHA du commit local et les captures ; attendre l'autorisation expresse du Lot 2. Attendre une autorisation explicite avant le Lot 2.
+- Confirmer l'heure réelle de la session du 25 octobre, préparer la source d'import historique 1–11 et les futurs buckets R2 seulement aux lots autorisés. Aucun de ces points ne bloque le commit local de clôture du Lot 2.
+- **Prochaine action concrète :** remettre au propriétaire le SHA du commit local, les captures, les tests et les limites, puis attendre sa validation explicite avant tout Lot 3.

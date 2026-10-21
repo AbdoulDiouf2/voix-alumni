@@ -1,6 +1,6 @@
 # 09 — Contrats API REST (proposition initiale)
 
-> **Projet :** Voix d’Alumni Studio · **Édition :** 21 octobre 2026 · **Statut :** Spécification initiale à valider lors du lot 0
+> **Projet :** Voix d’Alumni Studio · **Édition :** 21 octobre 2026 · **Statut :** Spécification cible et état exécuté des Lots 1–2
 > **Objet :** Décrire la frontière UI/backend, validations métier et erreurs.
 > **Référence UX :** `Docs/voix_alumni_studio_prototype.html` (maquette de démonstration validée ; ne pas la modifier automatiquement).
 
@@ -9,7 +9,7 @@
 
 Base métier proposée `/api/v1`, servie par Hono. Better Auth est monté **dans le même backend** sous `/api/auth/*` avant les routes métier ; ses endpoints et schémas sont ceux de la version épinglée, sans réimplémentation maison de login/logout. HTTPS en production, même origine via Caddy, JSON UTF-8 ; cookie de session et protection CSRF/origine. Réponses paginées, `request_id` en erreurs, dates ISO 8601 UTC, zones IANA explicites. **Les routes sont des contrats à implémenter**, pas une affirmation qu'elles existent.
 
-Lot 1 effectivement présent : `GET /api/health`, `GET /api/ready`, `GET /api/capabilities`, `/api/auth/*` Better Auth, `GET /api/v1/me`, `GET /api/v1/dashboard` et les routes de rôle `GET /api/v1/responsable/overview`, `GET /api/v1/production/overview`. Le tableau de bord retourne `status: "empty", items: []` tant qu’aucune donnée métier n’existe. Les autres routes de ce document restent des contrats futurs. Tout POST Better Auth exige l’origine exacte configurée.
+Lot 1 effectivement présent : `GET /api/health`, `GET /api/ready`, `GET /api/capabilities`, `/api/auth/*` Better Auth, `GET /api/v1/me`, `GET /api/v1/dashboard` et les routes de rôle `GET /api/v1/responsable/overview`, `GET /api/v1/production/overview`. Au Lot 2, le tableau de bord lit les épisodes réellement enregistrés. Les routes métier effectivement livrées sont distinguées des contrats futurs dans la section « État exécuté du Lot 2 ». Tout POST Better Auth exige l’origine exacte configurée.
 
 Création publique interdite : email/mot de passe avec `disableSignUp`, Google OAuth avec `disableSignUp`, plus contrôle serveur de l'identité autorisée et active. Le callback OAuth d'un compte non autorisé ne doit ni créer d'identité métier ni ouvrir une session utilisable. Les routes publiques de feedback sont distinctes et limitées ; elles n'accordent jamais une session organisateur.
 
@@ -174,4 +174,25 @@ V1 utilise R2 derrière un port de stockage indépendant du fournisseur : `uploa
 
 Références : [données](08_MODELE_DE_DONNEES.md) · [workflow](02_WORKFLOWS_ET_REGLES_METIER.md) · [sécurité](13_SECURITE_ET_CONFIDENTIALITE.md).
 
-Les réponses Lot 1 `me` et `dashboard` sont validées par les mêmes schémas Zod exportés depuis `packages/contracts` dans l’API et dans React.
+Les réponses `me` et `dashboard` sont validées par les mêmes schémas Zod exportés depuis `packages/contracts` dans l’API et dans React.
+
+## État exécuté du Lot 2
+
+Les routes suivantes existent sous `/api/v1`, exigent une session active et contrôlent le rôle côté Hono. Les formes illustratives plus haut ne prévalent pas sur les schémas Zod de `packages/contracts` : `promotion_year` est une chaîne, les identifiants sont des UUID textuels, et les heures locales utilisent `YYYY-MM-DDTHH:mm` avec zone IANA. La réponse d'erreur Lot 2 est `{ "error": { "code": "...", "message"?: "..." } }` ; `request_id` et `fields` restent des objectifs futurs.
+
+| Routes réalisées | Règle effective |
+|---|---|
+| `GET /alumni`, `GET /alumni/duplicates`, `GET /alumni/:id` | Deux rôles ; recherche/filtres/tri, doublons indicatifs ; les notes de contact sont masquées à Production. |
+| `POST /alumni`, `PATCH /alumni/:id` | Deux rôles ; `contact_notes` réservées à Responsable ; mise à jour par `expected_version`. |
+| `POST /alumni/:id/archive`, `POST /alumni/:id/contact-events` | Responsable seulement ; pas d'envoi à l'intervenant. |
+| `GET /episodes`, `GET /episodes/:id` | Deux rôles ; consultation du dossier, de sa date et de son fuseau. |
+| `POST /episodes`, `POST /episodes/:id/confirm`, `/reschedule`, `/cancel`, `/handoff` | Responsable seulement ; transitions contrôlées, motif requis pour report/annulation, notification interne unique au relais. |
+| `PATCH /episodes/:id` | Deux rôles pour titre/thème ; modification d'horaire confirmé impossible hors report. |
+| `GET /notifications`, `POST /notifications/:id/read` | Session active ; seules les notifications du compte destinataire sont accessibles. Les relais ciblent Production. |
+| `GET /audit?entity_type=alumni|episode&entity_id=...` | Deux rôles ; historique des changements importants, jusqu'à 100 événements récents. |
+
+Les listes renvoient `{ "items": [...], "next_offset": nombre|null }` avec `limit` (1 à 100, défaut 50) et `offset`. La recherche des épisodes est faite côté serveur. `POST /confirm` attribue sous verrou transactionnel un numéro unique supérieur au plus grand numéro stocké et au plancher configuré. Au 21 octobre 2026, 1–9 sont réalisés, 10 et 11 réservés aux deux sessions décrites par le propriétaire ; `EPISODE_NUMBER_FLOOR=11` donne donc 12 comme premier numéro automatique. Cette réservation ne constitue pas un import historique.
+
+La date envisagée et la date confirmée sont distinctes ; les heures locales inexistantes ou doubles lors du changement d'heure sont rejetées. Un dossier ne peut être transmis que confirmé et avec poste/entreprise renseignés. Un second relais ne crée pas de seconde notification. L'upload R2, les tâches, les publications et le feedback ne sont pas des routes livrées au Lot 2.
+
+Le relais **ne requiert pas de portrait ni d'autorisation d'usage** : ces éléments restent explicitement à compléter dans le dossier Production. Pour le futur Lot 4, toute route serveur qui valide, exporte comme affiche prête à diffuser ou constate la publication d'un contenu **utilisant un portrait** devra vérifier une ressource privée liée au bon intervenant, `rights_status=granted`, un consentement actif pour la finalité exacte (annonce ou remerciement), sa portée et une référence de preuve. `unknown`, `requested`, `refused`, `revoked`, absence de consentement ou changement de portrait/consentement après validation doivent bloquer l'action ou invalider cette validation. Un contrôle de bouton React ne suffit pas. Aucune route de publication ou d'export de portrait n'existe au Lot 2.

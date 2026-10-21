@@ -35,6 +35,7 @@
 **Scénario :** Alassane créé en proposition, promo/poste/photos ajoutés, date encore non définitive ; Responsable transmet ensuite à Production.
 **Tests :** pas d'épisode forcé, unicité numéro, doublons non destructifs, interdiction confirmation par Production, notification unique.
 **Porte :** Responsable démontre prise de contact/confirmation et transfert sans assistance technique.
+**État local au 21/10/2026 :** autorisé, implémentation et recette locale en cours. Les fiches sans épisode, épisodes multiples, date envisagée/confirmée, transitions, relais et notification sont persistés dans PostgreSQL ; les scénarios A/B ont été rejoués sur desktop/mobile. La photo privée est limitée au modèle `media_assets` et au port de stockage : aucun upload R2 sans bucket ni identifiants autorisés. Les numéros 10 et 11 sont réservés aux sessions annoncées ; l'import réel reste à faire. Cette implémentation ne vaut pas validation du Lot 2 et n'autorise pas le Lot 3.
 
 ## Lot 3 — Parcours, tâches et demandes internes
 
@@ -47,7 +48,7 @@
 
 **Travaux :** modèles WhatsApp versionnés et éditables, variables dynamiques, copie, validation Responsable, confirmation manuelle publication ; import vrais logos ; studio simple V1 avec deux modèles d'affiches, aperçu et export PNG réel.
 **Scénario :** affiche de Sennen préparée et validée avec date/fuseau confirmé, puis annonce copiée et publiée manuellement.
-**Tests :** rendu PNG 4:5, débordements nom long, Unicode, fichiers autorisés, modification après validation, copie ≠ publié.
+**Tests :** rendu PNG 4:5, débordements nom long, Unicode, fichiers autorisés, modification après validation, copie ≠ publié ; API refusant validation, export diffusable et constat de publication avec portrait sans droit `granted`, consentement actif de finalité précise et preuve, ou après révocation/changement de portrait. Un dossier transmis avec ce manque reste autorisé au Lot 2.
 **Porte :** obtenir une affiche exploitable sans outil non documenté, et confirmer publication sans erreur de statut.
 
 ## Lot 5 — Session, feedback et post-production

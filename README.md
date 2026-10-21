@@ -65,16 +65,16 @@
 
 **Convention de comptage :** le pack initial comptait 21 Markdown (ce `README.md`, `AGENTS.md` et 19 documents numérotés). Les trois registres permanents portent ce total à 24. L'index documentaire est intégré ici ; la maquette HTML reste inchangée.
 
-## Installation locale et état du Lot 1
+## Installation locale et état du Lot 2
 
-Le socle TypeScript et l’authentification email/mot de passe du Lot 1 fonctionnent localement. Utiliser Node 24 (`.nvmrc`), `npm ci`, créer `.env` depuis `.env.example`, démarrer le PostgreSQL isolé, puis appliquer les migrations Drizzle avec `npm run db:migrate -w @voix-alumni/db`. Lancer `npm run dev:api` et `npm run dev:web` ; la connexion, les deux tableaux de bord vides et les huit rubriques sont vérifiables. Le provisionnement et la récupération passent par une commande privée ; voir [`Docs/11_GUIDE_DEVELOPPEMENT.md`](Docs/11_GUIDE_DEVELOPPEMENT.md). Google OAuth est préparé mais non exercé sans identifiants du projet. R2, les fonctionnalités métier et le studio restent pour les lots suivants. Aucun déploiement ni push n’a été réalisé.
+Le socle TypeScript, l’authentification du Lot 1 et les fiches intervenants/épisodes du Lot 2 fonctionnent localement. Utiliser Node 24 (`.nvmrc`), `npm ci`, créer `.env` depuis `.env.example`, démarrer le PostgreSQL isolé, puis appliquer les migrations Drizzle avec `npm run db:migrate -w @voix-alumni/db`. Lancer `npm run dev:api` et `npm run dev:web` ; la connexion, les deux tableaux de bord alimentés par l'API, le vivier, la planification et le relais sont vérifiables avec les deux rôles. Le provisionnement et la récupération passent par une commande privée ; voir [`Docs/11_GUIDE_DEVELOPPEMENT.md`](Docs/11_GUIDE_DEVELOPPEMENT.md). Google OAuth est préparé mais non exercé sans identifiants du projet. R2, le studio et les autres fonctions des Lots 3+ ne sont pas actifs. Aucun déploiement ni push n’a été réalisé.
 
 ## Conventions de décision et de maintenance documentaire
 
 - Mentionner explicitement **VALIDÉ**, **PROPOSÉ**, **À CONFIRMER**, **REPORTÉ**, **NON IMPLÉMENTÉ** pour distinguer faits, intentions et code.
 - En cas de contradiction : décisions humaines récentes > règles métier approuvées > spécifications écrites > maquette (illustrative) > suppositions de l'agent. Toute divergence significative se traite par question ciblée, sans invention.
 - Pour chaque intervention significative, actualiser le journal puis le statut avant la réponse finale ; inscrire immédiatement toute décision structurante approuvée. Une fonctionnalité n'est pas terminée si sa traçabilité reste incomplète.
-- Les exemples de Sennen Ekouagne (#10), Ézéchiel Ouattara (#09) et Alassane Mballo (#11) sont **des exemples issus des supports** ; aucun statut réel ne doit être déduit des cases de la maquette.
+- Les noms et cases de la maquette sont **illustratifs** ; aucun statut réel ne doit en être déduit. Le propriétaire a précisé séparément que les épisodes 1–9 sont réalisés, le 10 est la prochaine session et le 11 est planifié plus tard. Les données de ces épisodes ne sont pas encore importées.
 - **Attention fuseaux horaires :** le 25 octobre 2026 est un jour de changement d'heure en France. Une affiche « 18 h GMT+2 » ne suffit pas à déduire « 18 h Europe/Paris » ; confirmer l'instant réel avant toute notification.
 
 ## Gouvernance du dépôt
