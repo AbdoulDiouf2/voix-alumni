@@ -317,3 +317,8 @@ Ce journal est chronologique et **append-only** : ajouter de nouvelles entrées 
 
 - La configuration privée `.env` a été contrôlée sans afficher ses identifiants : `APP_ENV=development`, base cible exactement `voix_alumni_dev`. `npm run db:migrate -w @voix-alumni/db` a ensuite appliqué avec succès les migrations additives `0006`–`0008` à cette base propre au projet. Aucune migration de production ni modification d'une autre stack. Les bases test/E2E étaient déjà migrées et couvertes par la recette ; aucune donnée du dossier propriétaire n'a été importée.
 - README et guide de développement actualisés pour les fonctions Lots 1–4 et le chemin des résultats Playwright. Les limites de R2 réel et des ressources officielles autonomes restent inchangées.
+
+## 2026-10-21 19:02 Europe/Paris — Commit local de clôture technique du Lot 4
+
+- Après `git diff --cached --check`, 32 fichiers texte indexés ont été contrôlés par motifs de secrets sans résultat ; aucun `.env` privé ni média du dossier propriétaire indexé. Les dix PNG indexés sont des fixtures/screen captures explicitement fictives. Le commit local `132a6fad09fc936684a58815730cf33d67d133d0` a été créé sur `feat/lot-4-creative-communications` ; Git a annoncé 42 fichiers dans ce commit. Arbre propre immédiatement après. Cette entrée et le statut actualisé seront enregistrés par un commit documentaire séparé, sans push.
+- Tests finaux du code de ce commit : API 17/17, Playwright Lots 1–4 17 réussites/1 ignoré/0 échec, format, lint, typecheck, build et contrôle du diff réussis. R2 réel, médias réels, CI distante et production non vérifiés ; validation du propriétaire encore attendue. Lot 5 bloqué.

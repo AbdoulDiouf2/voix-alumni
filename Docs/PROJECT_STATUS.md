@@ -1,11 +1,11 @@
 # État courant du projet — Voix d'Alumni Studio
 
-> **Observé localement le 21 octobre 2026 à 18:57 Europe/Paris.** La CI distante, Cloudflare R2 réel et la production ne sont pas vérifiés.
+> **Observé localement le 21 octobre 2026 à 19:02 Europe/Paris.** La CI distante, Cloudflare R2 réel et la production ne sont pas vérifiés.
 
 ## Git et phase
 
 - **Lot actuel :** Lot 4 — Studio créatif et communications, implémenté et testé localement ; en attente de validation du propriétaire. Lot 5 non autorisé.
-- **Branche :** `feat/lot-4-creative-communications`, issue de `origin/main` `10f3939` (fusion PR #3). Le snapshot du Lot 4 est destiné à un commit local sur cette branche ; le SHA exact est à relever dans Git après commit. Aucun push, PR, merge ni déploiement autorisé ou exécuté.
+- **Branche :** `feat/lot-4-creative-communications`, issue de `origin/main` `10f3939` (fusion PR #3). Commit local d'implémentation `132a6fad09fc936684a58815730cf33d67d133d0` ; cette correction documentaire est à commiter séparément. Aucun push, PR, merge ni déploiement autorisé ou exécuté.
 - **Maquette :** `Docs/voix_alumni_studio_prototype.html` inchangée, SHA-256 `5c65b156ca85f517b9328b8843e16739602371bdf3bb0d80b89bf1a6cc3e1b5c`.
 
 ## Fonctionnalités vérifiées
