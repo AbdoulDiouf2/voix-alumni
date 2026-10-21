@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
-  outputDir: "/tmp/voix-alumni-e2e-results",
+  outputDir: "/tmp/voix-alumni-e2e-results-lot4",
   retries: 0,
   workers: 1,
   reporter: "list",

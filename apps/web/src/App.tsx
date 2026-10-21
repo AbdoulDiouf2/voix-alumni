@@ -46,6 +46,7 @@ import {
   WorkflowInbox,
   type Episode,
 } from "./Lot2";
+import { CreativeWorkspace } from "./Creative";
 
 type Role = OrganizerRole;
 type NavItem = { label: string; path: string; icon: LucideIcon; lot: number };
@@ -657,13 +658,36 @@ function AppShell({
                 <Settings organizer={organizer} googleOAuth={googleOAuth} />
               }
             />
-            {Object.keys(placeholders).map((path) => (
-              <Route
-                key={path}
-                path={path}
-                element={<PlaceholderPage path={path} />}
-              />
-            ))}
+            <Route
+              path="/studio"
+              element={
+                <CreativeWorkspace organizer={organizer} mode="poster" />
+              }
+            />
+            <Route
+              path="/communications"
+              element={
+                <CreativeWorkspace organizer={organizer} mode="message" />
+              }
+            />
+            <Route
+              path="/mediatheque"
+              element={<CreativeWorkspace organizer={organizer} mode="media" />}
+            />
+            {Object.keys(placeholders)
+              .filter(
+                (path) =>
+                  !["/studio", "/communications", "/mediatheque"].includes(
+                    path,
+                  ),
+              )
+              .map((path) => (
+                <Route
+                  key={path}
+                  path={path}
+                  element={<PlaceholderPage path={path} />}
+                />
+              ))}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

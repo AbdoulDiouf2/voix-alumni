@@ -113,3 +113,7 @@ G --> H[Lot 7 Production]
 Résumé, liste des fichiers, schémas/migrations, capture desktop/mobile si UI, tests passés/échoués, contraintes connues, instructions pour tester localement, documentation mise à jour, actions destructrices proposées mais **non exécutées sans accord**.
 
 Références : [tests](14_PLAN_DE_TESTS_ET_RECETTE.md) · [go-live](19_RECETTE_FINALE_ET_GO_LIVE.md).
+
+## État observé du Lot 4 au 21 octobre 2026
+
+La tranche verticale studio créatif/communications est implémentée et testée localement sur `feat/lot-4-creative-communications` : deux affiches PNG, six messages, médias privés, versions, validation, publication manuelle constatée et liaison auditée au parcours. La recette complète Lots 1–4 passe sur desktop/mobile (17 réussites, 1 scénario mobile ignoré sur le projet desktop). La recette R2 réelle attend les buckets et identifiants privés approuvés ; les logos autonomes officiels et preuves d'usage des médias fournis restent à confirmer avant contenu réel. Aucune étape du Lot 5 n'est commencée ni autorisée.

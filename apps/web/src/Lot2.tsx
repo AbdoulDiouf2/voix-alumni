@@ -1990,6 +1990,14 @@ export function EpisodePage({ organizer }: { organizer: Organizer }) {
         <Link to={`/intervenants/${item.alumni_id}`}>
           Voir la fiche intervenant ↗
         </Link>
+        {(organizer.role === "RESPONSABLE" || item.handed_off_at) && (
+          <>
+            <Link to={`/studio?episode=${item.id}`}>Studio créatif ↗</Link>
+            <Link to={`/communications?episode=${item.id}`}>
+              Communications ↗
+            </Link>
+          </>
+        )}
       </div>
       <Feedback error={error} value={success} />
       <div className="lot2-columns">

@@ -67,7 +67,7 @@
 
 ## Installation locale et état du Lot 2
 
-Le socle TypeScript, l’authentification du Lot 1 et les fiches intervenants/épisodes du Lot 2 fonctionnent localement. Utiliser Node 24 (`.nvmrc`), `npm ci`, créer `.env` depuis `.env.example`, démarrer le PostgreSQL isolé, puis appliquer les migrations Drizzle avec `npm run db:migrate -w @voix-alumni/db`. Lancer `npm run dev:api` et `npm run dev:web` ; la connexion, les deux tableaux de bord alimentés par l'API, le vivier, la planification et le relais sont vérifiables avec les deux rôles. Le provisionnement et la récupération passent par une commande privée ; voir [`Docs/11_GUIDE_DEVELOPPEMENT.md`](Docs/11_GUIDE_DEVELOPPEMENT.md). Google OAuth est préparé mais non exercé sans identifiants du projet. R2, le studio et les autres fonctions des Lots 3+ ne sont pas actifs. Aucun déploiement ni push n’a été réalisé.
+Le socle TypeScript et les fonctions des Lots 1–4 fonctionnent localement : authentification fermée, vivier, épisodes, parcours, studio d'affiches et communications. Utiliser Node 24 (`.nvmrc`), `npm ci`, créer `.env` depuis `.env.example`, démarrer le PostgreSQL isolé, puis appliquer les migrations Drizzle avec `npm run db:migrate -w @voix-alumni/db`. Lancer `npm run dev:api` et `npm run dev:web`. Le provisionnement des deux comptes passe par une commande privée ; voir [`Docs/11_GUIDE_DEVELOPPEMENT.md`](Docs/11_GUIDE_DEVELOPPEMENT.md). Google OAuth réel et Cloudflare R2 réel ne sont pas vérifiés sans identifiants/buckets autorisés. Aucun envoi externe ni déploiement n'est réalisé par le Lot 4.
 
 ## Conventions de décision et de maintenance documentaire
 
