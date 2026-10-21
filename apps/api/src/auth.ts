@@ -15,6 +15,12 @@ if (!databaseUrl || !secret || secret.length < 32) {
     "DATABASE_URL et BETTER_AUTH_SECRET (32 caractères minimum) sont requis",
   );
 }
+if (
+  process.env.APP_ENV === "e2e" &&
+  new URL(databaseUrl).pathname !== "/voix_alumni_e2e"
+) {
+  throw new Error("L'environnement E2E exige la base voix_alumni_e2e");
+}
 
 export const database = createDatabase(databaseUrl);
 
@@ -108,7 +114,7 @@ export const auth = betterAuth({
     },
   },
   rateLimit: {
-    enabled: process.env.NODE_ENV !== "test",
+    enabled: process.env.NODE_ENV !== "test" && process.env.APP_ENV !== "e2e",
     customRules:
       process.env.APP_ENV === "development"
         ? { "/sign-in/email": { window: 10, max: 20 } }

@@ -4,21 +4,19 @@ import {
   organizerSchema,
 } from "@voix-alumni/contracts";
 import { organizerMemberships, type createDatabase } from "@voix-alumni/db";
-import { eq } from "drizzle-orm";
+import { alumni, episodes } from "@voix-alumni/db/schema";
+import { desc, eq, isNotNull } from "drizzle-orm";
 import { Hono } from "hono";
 import type { auth as authInstance } from "./auth.js";
+import { registerLot2Routes, type BusinessEnv } from "./lot2.js";
 
 type Dependencies = {
   auth: typeof authInstance;
   database: ReturnType<typeof createDatabase>;
 };
-type Organizer = {
-  user: { id: string; name: string; email: string };
-  role: "RESPONSABLE" | "PRODUCTION";
-};
 
 export function createApp({ auth, database }: Dependencies) {
-  const app = new Hono<{ Variables: { organizer: Organizer } }>();
+  const app = new Hono<BusinessEnv>();
 
   app.get("/api/health", (c) =>
     c.json(healthSchema.parse({ status: "ok", service: "voix-alumni-api" })),
@@ -34,7 +32,10 @@ export function createApp({ auth, database }: Dependencies) {
   });
 
   app.get("/api/capabilities", (c) =>
-    c.json({ googleOAuth: Boolean(auth.options.socialProviders?.google) }),
+    c.json({
+      googleOAuth: Boolean(auth.options.socialProviders?.google),
+      isolatedE2e: process.env.APP_ENV === "e2e",
+    }),
   );
 
   app.use("/api/auth/*", async (c, next) => {
@@ -85,9 +86,30 @@ export function createApp({ auth, database }: Dependencies) {
     );
   });
 
-  app.get("/api/v1/dashboard", (c) => {
+  app.get("/api/v1/dashboard", async (c) => {
     const { role } = c.get("organizer");
-    return c.json(dashboardSchema.parse({ role, status: "empty", items: [] }));
+    const rows = await database.db
+      .select({ episode: episodes, person: alumni })
+      .from(episodes)
+      .innerJoin(alumni, eq(episodes.alumniId, alumni.id))
+      .where(
+        role === "PRODUCTION" ? isNotNull(episodes.handedOffAt) : undefined,
+      )
+      .orderBy(desc(episodes.createdAt))
+      .limit(20);
+    const items = rows.map(({ episode, person }) => ({
+      id: episode.id,
+      alumni_name: person.fullName,
+      public_number: episode.publicNumber,
+      status: episode.status,
+    }));
+    return c.json(
+      dashboardSchema.parse({
+        role,
+        status: items.length ? "ready" : "empty",
+        items,
+      }),
+    );
   });
 
   app.get("/api/v1/responsable/overview", (c) =>
@@ -101,6 +123,8 @@ export function createApp({ auth, database }: Dependencies) {
       ? c.json({ status: "empty", items: [] })
       : c.json({ error: { code: "FORBIDDEN" } }, 403),
   );
+
+  registerLot2Routes(app, database);
 
   return app;
 }

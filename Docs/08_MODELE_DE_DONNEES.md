@@ -1,6 +1,6 @@
 # 08 — Modèle de données, relations et contraintes
 
-> **Projet :** Voix d’Alumni Studio · **Édition :** 21 octobre 2026 · **Statut :** Spécification initiale à valider lors du lot 0
+> **Projet :** Voix d’Alumni Studio · **Édition :** 21 octobre 2026 · **Statut :** Modèle cible et état réalisé des Lots 1–2
 > **Objet :** Donner les entités métier et les invariants de persistance pour PostgreSQL et Drizzle.
 > **Référence UX :** `Docs/voix_alumni_studio_prototype.html` (maquette de démonstration validée ; ne pas la modifier automatiquement).
 
@@ -110,6 +110,16 @@ Types : portrait, logo, affiche, transcript, recording_reference, feedback_impor
 - Import : `file_checksum`, `episode_id`, `uploaded_at`, `mapping_version`, `raw_count`, `accepted_count`, `rejected_count` ; unique `(episode_id, file_checksum)` par défaut.
 - Réponses importées : `source=historical_import`, `import_id`, empreinte de ligne ou identifiant source, date et valeurs acceptées ; pas de numéros de téléphone obligatoires pour donner son avis.
 - Les agrégats conservés après suppression de réponses individuelles doivent être réellement anonymisés, sans cellule ou combinaison permettant de retrouver une personne.
+
+## État réel du schéma au Lot 2
+
+La migration Drizzle `0003_famous_swarm.sql`, appliquée aux bases isolées de développement et de test, crée `alumni`, `episodes`, `business_events`, `internal_notifications` et `media_assets`. Une fiche `alumni` n'exige aucun épisode ; plusieurs épisodes peuvent référencer la même fiche. `promotion_year` est actuellement du texte nullable. `version` sert aux mises à jour concurrentes ; `archived_at` archive la fiche sans détruire ses épisodes. Les champs `lead_user_id`, `created_by` et `updated_by` réfèrent aux comptes Better Auth.
+
+`episodes` distingue `tentative_start_at` et `start_at_utc`, conserve `event_timezone` IANA, `schedule_version`, `status_reason`, `confirmed_at`, `handed_off_at`, `lead_user_id` et `production_user_id`. `public_number` est nullable jusqu'à confirmation, unique en base, et attribué sous verrou transactionnel. Le plancher local est 11 : les numéros 1–9 sont réalisés, 10 et 11 réservés selon l'indication du propriétaire ; les fiches historiques ne sont pas encore importées. Le numéro ne change pas au report.
+
+`business_events` journalise création, édition, changement de relation, confirmation, report, annulation et relais avec auteur et horodatage. Les éditions enregistrent les noms des champs changés, jamais le contenu des notes de contact ; le report conserve l'ancienne et la nouvelle date UTC. `internal_notifications` contient le destinataire Production et un index d'unicité du relais par épisode. `media_assets` conserve fournisseur, portée du bucket, clé opaque, type, taille, empreinte et droit d'usage. Le port `PrivateObjectStore` existe dans `apps/api/src/storage.ts`. Aucun objet n'est téléversé, aucune URL signée n'est produite et aucun bucket R2 n'a été créé : les champs média ne valent pas preuve d'un stockage opérationnel.
+
+Les champs cible de la section précédente absents du schéma Lot 2, notamment `held_at`, `closed_at`, `recording_rights_status`, `meeting_url`, `feedback_url`, `youtube_url` et `media_consents`, restent à développer dans leurs lots respectifs. L'historique des épisodes déjà réalisés est protégé par la machine d'états serveur : aucune route Lot 2 ne permet de déclarer un épisode réalisé ni de modifier cet état. Les notes de contact ne sont renvoyées par l'API qu'à Responsable.
 
 ### `notifications`, `reminder_jobs`, `audit_events`
 

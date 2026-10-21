@@ -2,10 +2,15 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
+  outputDir: "/tmp/voix-alumni-e2e-results",
   retries: 0,
   workers: 1,
   reporter: "list",
-  use: { baseURL: "http://127.0.0.1:5173", trace: "off" },
+  use: {
+    baseURL: process.env.E2E_BASE_URL ?? "http://127.0.0.1:5174",
+    locale: "fr-FR",
+    trace: "off",
+  },
   projects: [
     {
       name: "desktop",

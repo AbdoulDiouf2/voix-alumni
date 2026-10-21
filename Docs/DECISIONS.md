@@ -31,7 +31,7 @@ Ce registre conserve les décisions approuvées et leurs remplacements. Une nouv
 - **Alternatives documentées :** disque local du VPS comme stockage principal ; Cloudflare R2 S3 compatible derrière une abstraction de stockage.
 - **Décision :** deux buckets privés distincts développement/production avec restriction de juridiction UE, droits minimaux, URLs temporaires signées et métadonnées PostgreSQL ; originaux volumineux hors VPS ; copie indépendante des médias critiques.
 - **Justification :** confidentialité, maîtrise de l'espace disque et possibilité de migration du fournisseur.
-- **Conséquences :** interface de stockage préparée au Lot 0 ; aucun bucket, identifiant ni adaptateur R2 créé aux Lots 0–1. Sauvegarde/restauration média encore à construire et tester.
+- **Conséquences :** interface de stockage préparée au Lot 0 et modèle `media_assets` ajouté au Lot 2 ; aucun bucket, identifiant ni adaptateur R2 créé. Sauvegarde/restauration média encore à construire et tester.
 - **Statut :** VALIDÉE, mise en œuvre REPORTÉE au lot média.
 - **Source :** instructions du propriétaire ; `Docs/07_ARCHITECTURE_TECHNIQUE.md`, `Docs/16_DEPLOIEMENT_ET_ENVIRONNEMENTS.md`.
 
@@ -75,7 +75,7 @@ Ce registre conserve les décisions approuvées et leurs remplacements. Une nouv
 - **Alternatives documentées :** se fier à un décalage fixe `GMT+2` ; conserver un fuseau IANA et confirmer l'instant réel.
 - **Décision :** garder intégralement la maquette comme référence UX/visuelle sans la modifier ; utiliser des fuseaux IANA ; ne pas figer l'horaire de la session du 25 octobre avant confirmation de la Responsable.
 - **Justification :** fidélité à l'UX validée et prévention d'une annonce à un instant erroné.
-- **Conséquences :** shell Lot 1 inspiré de la maquette ; aucune donnée illustrative de la maquette n'est traitée comme événement réel. Horaire toujours À CONFIRMER.
+- **Conséquences :** shell Lot 1 et écrans Lot 2 inspirés de la maquette ; validation IANA et rejet des heures locales ambiguës/inexistantes côté API. Aucune donnée illustrative de la maquette n'est traitée comme événement réel. Horaire du 25 octobre toujours À CONFIRMER.
 - **Statut :** VALIDÉE ; horaire métier NON CONFIRMÉ.
 - **Source :** instructions du propriétaire ; `Docs/05_DESIGN_SYSTEM_ET_UX.md`, `Docs/12_PLAN_IMPLEMENTATION.md`.
 
@@ -89,6 +89,39 @@ Ce registre conserve les décisions approuvées et leurs remplacements. Une nouv
 - **Conséquences :** une tâche ne peut être déclarée terminée si les registres ne reflètent pas code, tests et Git. Le contrôle CI détecte un oubli de fichier, pas la véracité du contenu ; celle-ci reste à vérifier par l'agent et le relecteur.
 - **Statut :** VALIDÉE, appliquée à partir de cette intervention.
 - **Source :** instruction explicite du propriétaire demandant ces trois registres et les règles permanentes.
+
+## DEC-009 — Réservation des numéros historiques
+
+- **Date :** 2026-10-21 (heure exacte de la correction non vérifiable).
+- **Contexte :** la documentation de départ illustrait un épisode 11 sans prouver la séquence historique ; une première réponse du propriétaire a été corrigée dans la même intervention.
+- **Alternatives :** attribuer le prochain numéro dès 10 ; réserver les sessions déjà annoncées puis commencer la numérotation automatique après elles.
+- **Décision :** épisodes 1 à 9 déjà réalisés, prochaine session numéro 10, session planifiée ultérieurement numéro 11. Réserver 10 et 11 ; les nouveaux épisodes confirmés automatiquement commencent à 12 via un plancher de 11, sous réserve de la reprise de l'historique avant usage réel.
+- **Justification :** correction explicite du propriétaire, afin de ne pas attribuer aux nouveaux dossiers les numéros des deux sessions déjà annoncées.
+- **Conséquences :** `.env.example` et le défaut API fixent `EPISODE_NUMBER_FLOOR=11` ; le numéro est attribué à la confirmation, de façon transactionnelle, et unique en base. Les sessions 1–11 ne sont pas encore importées ou matérialisées dans la base locale. La séquence devra être conciliée avec la source historique avant production.
+- **Statut :** VALIDÉE pour la règle de réservation ; import historique EN ATTENTE.
+- **Source :** correction explicite du propriétaire pendant le Lot 2 ; `Docs/15_MIGRATION_HISTORIQUE.md` pour la future reprise.
+
+## DEC-010 — Contrôle des droits de portrait avant publication
+
+- **Date :** 2026-10-21 (heure de l'instruction non vérifiable).
+- **Contexte :** le relais à la Production peut avoir lieu avec des éléments à compléter, dont les droits d'utilisation du portrait.
+- **Alternatives :** bloquer tout relais incomplet ; autoriser le relais puis contrôler les droits au moment d'une publication utilisant le portrait.
+- **Décision :** le relais reste possible avec une mention explicite des éléments manquants ; toute future publication utilisant un portrait devra être bloquée côté serveur tant que le droit d'utilisation applicable n'est pas vérifié et enregistré.
+- **Justification :** permettre le travail interne sans transformer une transmission en autorisation de publier.
+- **Conséquences :** les contrats et la recette des lots de publication portent cette porte de contrôle ; aucune fonctionnalité de publication ni studio d'affiches n'est implémenté au Lot 2.
+- **Statut :** VALIDÉE ; contrôle de publication À IMPLÉMENTER au lot concerné.
+- **Source :** instruction explicite du propriétaire pour la clôture du Lot 2.
+
+## DEC-011 — Base isolée pour la recette navigateur automatisée
+
+- **Date :** 2026-10-21 (heure de l'instruction non vérifiable).
+- **Contexte :** les scénarios Playwright créent des fiches et des épisodes ; la base de développement doit rester disponible pour l'import historique et la recette manuelle.
+- **Alternatives :** exécuter les scénarios dans la base de développement avec nettoyage ciblé ; utiliser une base E2E propre, distincte et réinitialisable.
+- **Décision :** les scénarios automatisés utilisent uniquement `voix_alumni_e2e`, une API et un frontend dédiés. L'API et les tests refusent de démarrer si le mode ou la base isolée ne correspondent pas ; seul l'outil E2E peut réinitialiser ses tables.
+- **Justification :** rendre les scénarios reproductibles sans polluer ou effacer les données de développement et les numéros historiques réservés.
+- **Conséquences :** deux comptes fictifs sont provisionnés exclusivement dans la base E2E ; les futurs tests navigateur doivent conserver le garde-fou. Les numéros 1–11 restent réservés et les nouveaux dossiers commencent à 12 après réinitialisation E2E.
+- **Statut :** VALIDÉE et appliquée localement ; CI distante non exécutée.
+- **Source :** instruction explicite du propriétaire pour la clôture du Lot 2 et vérifications locales consignées dans `DEV_JOURNAL.md`.
 
 ## Décisions remplacées
 

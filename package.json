@@ -13,6 +13,9 @@
   "scripts": {
     "dev:api": "npm run dev -w @voix-alumni/api",
     "dev:web": "npm run dev -w @voix-alumni/web",
+    "dev:e2e:api": "node --env-file=.env.e2e --import tsx apps/api/src/server.ts",
+    "dev:e2e:web": "VITE_API_PROXY_TARGET=http://127.0.0.1:8877 npm run dev -w @voix-alumni/web -- --port 5174 --strictPort",
+    "e2e:prepare": "node --env-file=.env.e2e --import tsx apps/api/src/e2e-prepare.ts",
     "build": "npm run build -w @voix-alumni/contracts && npm run build -w @voix-alumni/db && npm run build -w @voix-alumni/api && npm run build -w @voix-alumni/web",
     "typecheck": "npm run build -w @voix-alumni/contracts && npm run build -w @voix-alumni/db && npm run typecheck -w @voix-alumni/api && npm run typecheck -w @voix-alumni/web",
     "lint": "eslint apps packages e2e playwright.config.ts",

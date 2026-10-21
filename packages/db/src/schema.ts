@@ -4,6 +4,7 @@ import {
   text,
   timestamp,
   boolean,
+  integer,
   index,
   uniqueIndex,
   check,
@@ -139,3 +140,164 @@ export const accountRelations = relations(account, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+// Lot 2: a person remains in the alumni pool independently of any episode.
+export const alumni = pgTable(
+  "alumni",
+  {
+    id: text("id").primaryKey(),
+    fullName: text("full_name").notNull(),
+    promotionYear: text("promotion_year"),
+    jobTitle: text("job_title"),
+    company: text("company"),
+    linkedinUrl: text("linkedin_url"),
+    biography: text("biography"),
+    contactNotes: text("contact_notes"),
+    sourceRef: text("source_ref"),
+    relationStatus: text("relation_status").notNull().default("brouillon"),
+    lastContactAt: timestamp("last_contact_at", { withTimezone: true }),
+    lastContactChannel: text("last_contact_channel"),
+    leadUserId: text("lead_user_id").references(() => user.id, {
+      onDelete: "restrict",
+    }),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    updatedBy: text("updated_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    version: integer("version").notNull().default(1),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("alumni_name_idx").on(table.fullName),
+    index("alumni_status_idx").on(table.relationStatus),
+  ],
+);
+
+export const episodes = pgTable(
+  "episodes",
+  {
+    id: text("id").primaryKey(),
+    alumniId: text("alumni_id")
+      .notNull()
+      .references(() => alumni.id, { onDelete: "restrict" }),
+    publicNumber: integer("public_number").unique(),
+    title: text("title"),
+    topic: text("topic"),
+    status: text("status").notNull().default("proposition"),
+    tentativeStartAt: timestamp("tentative_start_at", { withTimezone: true }),
+    startAtUtc: timestamp("start_at_utc", { withTimezone: true }),
+    eventTimezone: text("event_timezone"),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    handedOffAt: timestamp("handed_off_at", { withTimezone: true }),
+    scheduleVersion: integer("schedule_version").notNull().default(1),
+    statusReason: text("status_reason"),
+    leadUserId: text("lead_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    productionUserId: text("production_user_id").references(() => user.id, {
+      onDelete: "restrict",
+    }),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    updatedBy: text("updated_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    version: integer("version").notNull().default(1),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("episodes_alumni_idx").on(table.alumniId),
+    index("episodes_status_idx").on(table.status),
+  ],
+);
+
+export const businessEvents = pgTable(
+  "business_events",
+  {
+    id: text("id").primaryKey(),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id").notNull(),
+    action: text("action").notNull(),
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    details: text("details"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("business_events_entity_idx").on(table.entityType, table.entityId),
+  ],
+);
+
+export const internalNotifications = pgTable(
+  "internal_notifications",
+  {
+    id: text("id").primaryKey(),
+    episodeId: text("episode_id")
+      .notNull()
+      .references(() => episodes.id, { onDelete: "cascade" }),
+    recipientUserId: text("recipient_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    kind: text("kind").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("internal_notifications_episode_kind_idx").on(
+      table.episodeId,
+      table.kind,
+    ),
+  ],
+);
+
+// R2 adapter and upload endpoints are intentionally absent until private buckets exist.
+export const mediaAssets = pgTable(
+  "media_assets",
+  {
+    id: text("id").primaryKey(),
+    alumniId: text("alumni_id").references(() => alumni.id, {
+      onDelete: "restrict",
+    }),
+    episodeId: text("episode_id").references(() => episodes.id, {
+      onDelete: "restrict",
+    }),
+    kind: text("kind").notNull(),
+    storageProvider: text("storage_provider").notNull(),
+    bucketScope: text("bucket_scope").notNull(),
+    storageKey: text("storage_key").notNull().unique(),
+    originalFilename: text("original_filename").notNull(),
+    mimeType: text("mime_type").notNull(),
+    byteSize: text("byte_size").notNull(),
+    sha256: text("sha256").notNull(),
+    rightsStatus: text("rights_status").notNull().default("unknown"),
+    uploadedBy: text("uploaded_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("media_assets_alumni_idx").on(table.alumniId),
+    index("media_assets_episode_idx").on(table.episodeId),
+  ],
+);

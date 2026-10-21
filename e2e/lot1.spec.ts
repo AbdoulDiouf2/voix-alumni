@@ -1,5 +1,8 @@
 import { readFileSync } from "node:fs";
 import { test, expect } from "@playwright/test";
+import { requireIsolatedE2e } from "./require-isolated-e2e";
+
+test.beforeAll(async ({ request }) => requireIsolatedE2e(request));
 
 const credentials = JSON.parse(
   readFileSync(
@@ -31,7 +34,12 @@ async function login(
   await expect(page.locator(".quick-card .role-badge")).toHaveText(
     role === "RESPONSABLE" ? "Responsable" : "Production",
   );
-  await expect(page.getByText("Aucun épisode pour le moment")).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      name:
+        role === "RESPONSABLE" ? "Épisodes à suivre" : "Production à préparer",
+    }),
+  ).toBeVisible();
 }
 
 test("anonymous visitor sees login and cannot access account pages", async ({
@@ -80,7 +88,9 @@ test("responsable sees role dashboard, navigation and logout", async ({
       .click();
   }
   await expect(page.getByRole("heading", { name: "Épisodes" })).toBeVisible();
-  await expect(page.getByText("Aucun épisode enregistré.")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Nouvel épisode" }),
+  ).toBeVisible();
   await page.screenshot({
     path: `Docs/recette/lot-1/episodes-${testInfo.project.name}.png`,
     fullPage: true,

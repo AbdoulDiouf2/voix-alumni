@@ -26,6 +26,8 @@ Consulter `04_ROLES_ET_PERMISSIONS.md`. La Responsable seule peut déclarer cont
 
 Chaque ressource sensible conserve un statut `rights_status`: `unknown`, `requested`, `granted`, `refused`, `revoked` ; préciser portée (annonce, archive, YouTube) et preuve/référence si disponible. Ne pas considérer un portrait fourni par WhatsApp comme une autorisation universelle. Les logos institutionnels doivent être fournis dans une qualité et sous droits d'usage convenus.
 
+**Porte média à implémenter avec les contenus du Lot 4 :** le passage de relais du Lot 2 reste possible avec portrait ou droits manquants, signalés à Production. Dès qu'un portrait est utilisé dans un visuel exportable ou publiable, le backend doit exiger `granted` et un consentement courant correspondant à la finalité précise, lié au portrait et à l'intervenant, avec portée et preuve. Une révocation, un changement de portrait ou une édition des droits invalide les validations antérieures. Les états `unknown`, `requested`, `refused`, `revoked` et l'absence de preuve interdisent la validation/exportation destinée à la diffusion et le constat de publication. Tester ces refus au niveau API ; ne jamais se fonder sur la seule visibilité du contrôle dans React.
+
 Pour l'enregistrement d'une session : vérifier l'information des participants, l'accord de diffusion et la portée (replay public/non listé/privé) avant mise en ligne ; respecter le retrait si possible. Les citations du transcript doivent être relues, contextualisées et validées avant attribution. Pas de génération inventant des phrases « prononcées ».
 
 ## 5. Collecte de feedback
