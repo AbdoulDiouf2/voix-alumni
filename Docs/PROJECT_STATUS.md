@@ -1,11 +1,11 @@
 # État courant du projet — Voix d'Alumni Studio
 
-> **Dernière actualisation :** 2026-10-21 14:42 Europe/Paris. Les résultats ci-dessous sont des observations locales ; la CI distante et la production ne sont pas vérifiées.
+> **Dernière actualisation :** 2026-10-21 15:07 Europe/Paris. Les résultats ci-dessous sont des observations locales ; la CI distante et la production ne sont pas vérifiées.
 
 ## Lot, phase et Git
 
-- **Lot actuel :** Lot 3 corrigé et testé localement après retour du propriétaire ; commit local de clôture autorisé après contrôles ; validation humaine finale attendue avant le Lot 4.
-- **Branche :** `feat/lot-3-workflows`, commit local de clôture créé depuis `c211c60`, documentation post-commit à inclure par amendement local ; les modifications documentaires préexistantes ont été conservées. Aucun push, PR, merge distant ni déploiement.
+- **Lot actuel :** Lot 3 validé fonctionnellement pour passage en Pull Request ; vérification mobile préalable au push réalisée, avec une correction ciblée. Lot 4 bloqué.
+- **Branche :** `feat/lot-3-workflows`, commit de clôture antérieur `e603698` vérifié propre avant contrôle mobile. Correction mobile et registres locaux à commiter puis pousser uniquement sur cette branche. Aucun PR, merge ni déploiement.
 - **Périmètre :** seul le dépôt Voix d'Alumni est modifié. La maquette HTML est inchangée, SHA-256 vérifié `5c65b156ca85f517b9328b8843e16739602371bdf3bb0d80b89bf1a6cc3e1b5c`.
 
 ## Fonctionnalités terminées et vérifiées localement
@@ -19,7 +19,7 @@
 
 ## Tests, environnements et déploiements
 
-- **Dernière passe locale après toutes les corrections :** 16/16 tests API ; suite Playwright complète Lots 1–3 desktop/mobile : 15 réussites, 1 test mobile ignoré sur desktop, zéro échec ; format, lint, typecheck, build et `git diff --check` réussis. Les scénarios couvrent le correctif backend des réponses répétées, la synchronisation des événements, les règles de validation, les demandes et notifications, les rôles, le report et les versions concurrentes. CI distante et production non vérifiées.
+- **Dernière passe locale après correction mobile :** suite Playwright complète Lots 1–3 desktop/mobile : 15 réussites, 1 test mobile ignoré sur desktop, zéro échec ; 20 commandes vérifiées atteignables dans un viewport 390 × 664. Format, lint, typecheck, build et `git diff --check` réussis. API 16/16 lors de la passe du commit `e603698` ; pas de changement API depuis. CI distante et production non vérifiées.
 - **Isolation :** `voix_alumni_e2e` est la seule base visée par Playwright ; API 8877 et web 5174 dédiés. Le serveur et la recette refusent une cible non E2E. Préparation limitée à cette base. Les migrations additives `0004` et `0005` ont été appliquées aux bases propres au projet dev/test/E2E ; aucun schéma d'une autre application modifié. Le nombre actuel de données E2E n'est pas inventorié ; la base dev n'a pas reçu de fixture de la recette Lot 3. Les comptes fictifs restent privés hors Git.
 - **Environnement :** Node 24 isolé, PostgreSQL propre au projet ; environ 13 Gio disponibles au dernier contrôle après suppression automatique du conteneur Playwright jetable. Aucun bucket R2, image applicative, CI distante ou déploiement lancé. Aucun état des applications voisines n'est inféré.
 
@@ -34,4 +34,4 @@
 ## Décisions en attente et prochaine action
 
 - Confirmer l'heure réelle de la session du 25 octobre, préparer la source d'import historique 1–11 et les futurs buckets R2 seulement aux lots autorisés. Les actions métier de publication et de replay requièrent les lots suivants.
-- **Prochaine action concrète :** inclure le contrôle post-commit dans le commit local autorisé, vérifier l'arbre Git et remettre captures et résultats au propriétaire ; attendre sa validation finale du Lot 3 avant tout Lot 4. Aucune action distante autorisée.
+- **Prochaine action concrète :** commiter la correction mobile, vérifier l'arbre Git et les fichiers suivis, pousser uniquement `feat/lot-3-workflows`, vérifier son SHA distant, puis attendre l'autorisation du propriétaire pour toute autre action. Aucun déploiement ni Lot 4.

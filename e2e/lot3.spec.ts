@@ -232,6 +232,26 @@ test("parcours partagé Responsable et Production", async ({
     const summary = productionPage.locator(".lot3-overview");
     await summary.scrollIntoViewIfNeeded();
     await expect(summary).toBeVisible();
+    const controls = productionPage.locator(
+      ".lot3-workflow summary, .lot3-workflow button, .lot3-workflow select",
+    );
+    let checked = 0;
+    for (let index = 0; index < (await controls.count()); index++) {
+      const control = controls.nth(index);
+      if (!(await control.isVisible())) continue;
+      await control.scrollIntoViewIfNeeded();
+      const reachable = await control.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        const hit = document.elementFromPoint(
+          (bounds.left + bounds.right) / 2,
+          (bounds.top + bounds.bottom) / 2,
+        );
+        return hit === element || element.contains(hit);
+      });
+      expect(reachable).toBeTruthy();
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(10);
   }
   await productionPage.evaluate(() => window.scrollTo(0, 0));
   await productionPage.screenshot({

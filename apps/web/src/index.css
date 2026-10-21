@@ -1420,6 +1420,14 @@ a {
   margin-bottom: 0.8rem;
 }
 @media (max-width: 760px) {
+  .lot3-workflow summary,
+  .lot3-workflow button,
+  .lot3-workflow select,
+  .lot3-workflow input,
+  .lot3-workflow textarea {
+    scroll-margin-top: 18rem;
+    scroll-margin-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
   .lot3-overview {
     position: sticky;
     top: 0;
