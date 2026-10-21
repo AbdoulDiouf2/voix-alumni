@@ -123,6 +123,15 @@ Ce registre conserve les décisions approuvées et leurs remplacements. Une nouv
 - **Statut :** VALIDÉE et appliquée localement ; CI distante non exécutée.
 - **Source :** instruction explicite du propriétaire pour la clôture du Lot 2 et vérifications locales consignées dans `DEV_JOURNAL.md`.
 
+## DEC-012 — Synchronisation des tâches avec les événements métier
+
+- **Date :** 2026-10-21 (heure exacte non vérifiée).
+- **Contexte :** une confirmation et un relais déjà persistés au Lot 2 pouvaient apparaître comme tâches non faites dans le parcours du Lot 3.
+- **Décision :** synchroniser de façon transactionnelle et idempotente les seules tâches prédéfinies intactes de contact effectif, confirmation et relais à partir des événements métier vérifiables. Conserver la référence, l'auteur et la date dans l'audit. Préserver toute tâche adaptée ou personnalisée. Laisser manuelles les tâches qui demandent une vérification humaine et la validation explicite de chaque étape.
+- **Conséquences :** la première lecture et les lectures ultérieures du parcours peuvent compléter ces tâches si l'événement existe ; elles n'envoient aucun message externe et ne valident aucune étape. Les états de présentation distinguent « À venir », « En cours », « Tâches terminées » et « Étape validée ».
+- **Statut :** VALIDÉE dans le cadre des corrections demandées pour le Lot 3 ; implémentation locale testée.
+- **Source :** instruction explicite du propriétaire avant clôture du Lot 3.
+
 ## Décisions remplacées
 
 Aucune décision remplacée n'est identifiée dans les preuves disponibles **depuis l'ouverture de ce registre**. L'ancien choix FastAPI/Python a été remplacé par `DEC-001` avant l'initialisation du registre ; ses références historiques restent dans le contexte de `DEC-001` et dans les documents du Lot 0. Toute future substitution recevra un nouvel identifiant et une référence croisée sans effacer l'entrée d'origine.

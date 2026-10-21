@@ -72,6 +72,374 @@ beforeAll(async () => {
   }
 });
 
+describe("Lot 3 operational workflow", () => {
+  it("keeps task progress, internal requests, notifications and history after reload", async () => {
+    const responsible = await login(fixtures[0].email);
+    const production = await login(fixtures[1].email);
+    const send = (
+      path: string,
+      cookie: string,
+      method = "GET",
+      payload?: unknown,
+    ) =>
+      request(path, {
+        method,
+        headers: { cookie, "content-type": "application/json" },
+        body: payload === undefined ? undefined : JSON.stringify(payload),
+      });
+    const person = await (
+      await send("/api/v1/alumni", responsible, "POST", {
+        full_name: "Lot Trois Fictif",
+        job_title: "Directrice",
+        company: "Exemple",
+      })
+    ).json();
+    const episode = await (
+      await send("/api/v1/episodes", responsible, "POST", {
+        alumni_id: person.id,
+      })
+    ).json();
+    expect(
+      (await send(`/api/v1/episodes/${episode.id}/workflow`, production))
+        .status,
+    ).toBe(403);
+    const confirmed = await (
+      await send(
+        `/api/v1/episodes/${episode.id}/confirm`,
+        responsible,
+        "POST",
+        {
+          expected_version: episode.version,
+          start_at_local: "2026-11-10T18:00",
+          event_timezone: "Europe/Paris",
+        },
+      )
+    ).json();
+    expect(
+      (
+        await send(
+          `/api/v1/episodes/${episode.id}/handoff`,
+          responsible,
+          "POST",
+          { expected_version: confirmed.version },
+        )
+      ).status,
+    ).toBe(200);
+    const base = `/api/v1/episodes/${episode.id}`;
+    const workflow = await (await send(`${base}/workflow`, production)).json();
+    expect(workflow.stages).toHaveLength(8);
+    expect(workflow.stages[0].state).toBe("a_venir");
+    expect(workflow.stages[1].state).toBe("taches_terminees");
+    expect(workflow.stages[1].completed).toBe(false);
+    expect(workflow.progress.attention_stage).toBe(3);
+    expect(
+      workflow.tasks.find(
+        (item: { definition_key: string }) => item.definition_key === "accord",
+      ).status,
+    ).toBe("terminee");
+    expect(
+      workflow.tasks.find(
+        (item: { definition_key: string }) => item.definition_key === "relais",
+      ).status,
+    ).toBe("terminee");
+    expect(
+      workflow.tasks.find(
+        (item: { definition_key: string }) => item.definition_key === "fiche",
+      ).status,
+    ).toBe("a_faire");
+    const custom = await send(`${base}/tasks`, responsible, "POST", {
+      stage: 2,
+      title: "Confirmer la participation et le créneau",
+      required: false,
+      owner_role: "RESPONSABLE",
+    });
+    expect(custom.status).toBe(201);
+    const customId = (await custom.json()).id;
+    const untouched = await (await send(`${base}/workflow`, production)).json();
+    expect(
+      untouched.tasks.find((item: { id: string }) => item.id === customId)
+        .status,
+    ).toBe("a_faire");
+    expect(
+      untouched.history.filter(
+        (item: { action: string }) => item.action === "task.synchronized",
+      ),
+    ).toHaveLength(2);
+    const preContact = await send(
+      `/api/v1/alumni/${person.id}/contact-events`,
+      responsible,
+      "POST",
+      { status: "a_contacter", expected_version: person.version },
+    );
+    expect(preContact.status).toBe(200);
+    expect(
+      (await (await send(`${base}/workflow`, production)).json()).tasks.find(
+        (item: { definition_key: string }) => item.definition_key === "contact",
+      ).status,
+    ).toBe("a_faire");
+    const contacted = await send(
+      `/api/v1/alumni/${person.id}/contact-events`,
+      responsible,
+      "POST",
+      {
+        status: "contacte",
+        expected_version: (await preContact.json()).version,
+      },
+    );
+    expect(contacted.status).toBe(200);
+    const synchronizedViews = await Promise.all([
+      send(`${base}/workflow`, production),
+      send(`${base}/workflow`, production),
+    ]);
+    expect(synchronizedViews.every((response) => response.status === 200)).toBe(
+      true,
+    );
+    const synchronized = await synchronizedViews[0].json();
+    expect(
+      synchronized.tasks.find(
+        (item: { definition_key: string }) => item.definition_key === "contact",
+      ).status,
+    ).toBe("terminee");
+    expect(
+      synchronized.history.filter(
+        (item: { action: string }) => item.action === "task.synchronized",
+      ),
+    ).toHaveLength(3);
+    expect(
+      (
+        await (await send(`${base}/workflow`, production)).json()
+      ).history.filter(
+        (item: { action: string }) => item.action === "task.synchronized",
+      ),
+    ).toHaveLength(3);
+    const task = workflow.tasks.find(
+      (item: { definition_key: string }) => item.definition_key === "profil",
+    );
+    expect(task.due_at).toBe("2026-11-03T17:00:00.000Z");
+    expect(
+      (
+        await send(`${base}/tasks/${task.id}`, responsible, "PATCH", {
+          expected_version: task.version,
+          status: "terminee",
+        })
+      ).status,
+    ).toBe(403);
+    const concurrent = await Promise.all(
+      [1, 2].map(() =>
+        send(`${base}/tasks/${task.id}`, production, "PATCH", {
+          expected_version: task.version,
+          status: "terminee",
+        }),
+      ),
+    );
+    expect(concurrent.map((response) => response.status).sort()).toEqual([
+      200, 409,
+    ]);
+    expect(
+      (
+        await send(`${base}/tasks/${task.id}`, production, "PATCH", {
+          expected_version: task.version,
+          status: "a_faire",
+        })
+      ).status,
+    ).toBe(409);
+    const created = await send(`${base}/requests`, production, "POST", {
+      subject: "Fonction exacte",
+      question: "Confirmer l’intitulé du poste ?",
+    });
+    expect(created.status).toBe(201);
+    const requestId = (await created.json()).id;
+    const notices = await (
+      await send("/api/v1/workflow-notifications", responsible)
+    ).json();
+    expect(
+      notices.items.filter(
+        (item: { episode_id: string }) => item.episode_id === episode.id,
+      ),
+    ).toHaveLength(1);
+    const notice = notices.items.find(
+      (item: { episode_id: string }) => item.episode_id === episode.id,
+    );
+    expect(notice.read_at).toBeNull();
+    expect(
+      (
+        await send(
+          `/api/v1/workflow-notifications/${notice.id}/read`,
+          production,
+          "POST",
+        )
+      ).status,
+    ).toBe(404);
+    const firstRead = await (
+      await send(
+        `/api/v1/workflow-notifications/${notice.id}/read`,
+        responsible,
+        "POST",
+      )
+    ).json();
+    expect(firstRead.read_at).not.toBeNull();
+    expect(
+      (
+        await (
+          await send(
+            `/api/v1/workflow-notifications/${notice.id}/read`,
+            responsible,
+            "POST",
+          )
+        ).json()
+      ).read_at,
+    ).toBe(firstRead.read_at);
+    expect(
+      (
+        await (await send("/api/v1/workflow-notifications", responsible)).json()
+      ).items.find((item: { id: string }) => item.id === notice.id).read_at,
+    ).not.toBeNull();
+    expect(
+      (
+        await send(
+          `/api/v1/requests/${requestId}/respond`,
+          production,
+          "POST",
+          { expected_version: 1, response: "Erreur" },
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await send(
+          `/api/v1/requests/${requestId}/respond`,
+          responsible,
+          "POST",
+          { expected_version: 1, response: "Directrice des opérations" },
+        )
+      ).status,
+    ).toBe(200);
+    const repeated = await send(
+      `/api/v1/requests/${requestId}/respond`,
+      responsible,
+      "POST",
+      { expected_version: 2, response: "Directrice des opérations" },
+    );
+    expect((await repeated.json()).notification_created).toBe(false);
+    const productionNotices = await (
+      await send("/api/v1/workflow-notifications", production)
+    ).json();
+    expect(
+      productionNotices.items.filter(
+        (item: { episode_id: string }) => item.episode_id === episode.id,
+      ),
+    ).toHaveLength(1);
+    expect(
+      (
+        await send(
+          `/api/v1/requests/${requestId}/resolve`,
+          production,
+          "POST",
+          { expected_version: 2 },
+        )
+      ).status,
+    ).toBe(200);
+    const final = await (await send(`${base}/workflow`, production)).json();
+    expect(final.progress.done).toBe(4);
+    expect(final.stages[2].completed).toBe(false);
+    expect(
+      (
+        await send(`${base}/stages/3/validate`, production, "POST", {
+          expected_version: final.stages[2].version,
+        })
+      ).status,
+    ).toBe(409);
+    for (const remaining of final.tasks.filter(
+      (item: { stage: number; required: boolean; status: string }) =>
+        item.stage === 3 && item.required && item.status !== "terminee",
+    )) {
+      expect(
+        (
+          await send(`${base}/tasks/${remaining.id}`, production, "PATCH", {
+            expected_version: remaining.version,
+            status: "terminee",
+          })
+        ).status,
+      ).toBe(200);
+    }
+    const ready = await (await send(`${base}/workflow`, production)).json();
+    expect(ready.stages[2].ready).toBe(true);
+    expect(ready.stages[2].completed).toBe(false);
+    expect(
+      (
+        await send(`${base}/stages/3/validate`, production, "POST", {
+          expected_version: ready.stages[2].version,
+        })
+      ).status,
+    ).toBe(200);
+    await expect(
+      (await send(`${base}/workflow`, production)).json(),
+    ).resolves.toHaveProperty("stages.2.completed", true);
+    const beforeReport = await (await send(base, responsible)).json();
+    const reported = await send(`${base}/reschedule`, responsible, "POST", {
+      expected_version: beforeReport.version,
+      start_at_local: "2026-11-12T18:00",
+      event_timezone: "Europe/Paris",
+      reason: "Nouveau créneau confirmé avec l’intervenant",
+    });
+    expect(reported.status).toBe(200);
+    const duringReport = await (
+      await send(`${base}/workflow`, production)
+    ).json();
+    expect(
+      duringReport.tasks.find(
+        (item: { definition_key: string }) => item.definition_key === "affiche",
+      ).due_at,
+    ).toBeNull();
+    const reconfirmed = await send(`${base}/confirm`, responsible, "POST", {
+      expected_version: (await reported.json()).version,
+      start_at_local: "2026-11-12T18:00",
+      event_timezone: "Europe/Paris",
+    });
+    expect(reconfirmed.status).toBe(200);
+    const afterReport = await (
+      await send(`${base}/workflow`, production)
+    ).json();
+    expect(
+      afterReport.tasks.find(
+        (item: { definition_key: string }) => item.definition_key === "affiche",
+      ).due_at,
+    ).toBe("2026-11-05T17:00:00.000Z");
+    const reunion = afterReport.tasks.find(
+      (item: { definition_key: string }) => item.definition_key === "reunion",
+    );
+    expect(
+      (
+        await send(`${base}/tasks/${reunion.id}`, production, "PATCH", {
+          expected_version: reunion.version,
+          due_local: "2026-10-25T02:30",
+        })
+      ).status,
+    ).toBe(422);
+    expect(
+      (
+        await send(`${base}/tasks/${reunion.id}`, production, "PATCH", {
+          expected_version: reunion.version,
+          title: "Tester le lien de réunion",
+          due_local: "2026-11-11T18:00",
+        })
+      ).status,
+    ).toBe(200);
+    const adapted = await (await send(`${base}/workflow`, production)).json();
+    expect(
+      adapted.tasks.find((item: { id: string }) => item.id === reunion.id)
+        .due_at,
+    ).toBe("2026-11-11T17:00:00.000Z");
+    expect(final.requests[0].status).toBe("résolue");
+    expect(
+      final.history.map((item: { action: string }) => item.action),
+    ).toContain("request.resolve");
+    expect(
+      final.history.map((item: { action: string }) => item.action),
+    ).toContain("task.updated");
+  });
+});
+
 afterAll(async () => {
   for (const fixture of fixtures) {
     await database.db

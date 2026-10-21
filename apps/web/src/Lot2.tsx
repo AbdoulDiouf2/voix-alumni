@@ -69,6 +69,56 @@ type Notification = {
   public_number: number | null;
   read_at: string | null;
 };
+type WorkflowTask = {
+  id: string;
+  stage: number;
+  title: string;
+  required: boolean;
+  owner_role: "RESPONSABLE" | "PRODUCTION";
+  status: string;
+  due_at: string | null;
+  comment: string | null;
+  version: number;
+};
+type WorkflowRequest = {
+  id: string;
+  subject: string;
+  question: string;
+  status: string;
+  response: string | null;
+  due_at: string | null;
+  version: number;
+};
+type Workflow = {
+  tasks: WorkflowTask[];
+  requests: WorkflowRequest[];
+  stages: {
+    number: number;
+    completed: boolean;
+    ready: boolean;
+    version: number;
+    done: number;
+    total: number;
+    state: "a_venir" | "en_cours" | "taches_terminees" | "validee";
+  }[];
+  progress: {
+    done: number;
+    total: number;
+    current_stage: number;
+    attention_stage: number | null;
+    remaining: number;
+    pending_requests: number;
+  };
+  history: {
+    id: string;
+    action: string;
+    details: string | null;
+    subject_type: string;
+    subject_id: string;
+    actor_name: string | null;
+    occurred_at: string;
+  }[];
+};
 
 const auditNames: Record<string, string> = {
   "alumni.created": "Fiche créée",
@@ -1305,6 +1355,503 @@ const journey = [
   "Remerciements et feedback",
   "Replay et clôture",
 ];
+const workflowActionNames: Record<string, string> = {
+  "task.created": "Tâche ajoutée",
+  "task.updated": "Tâche modifiée",
+  "task.synchronized": "Tâche terminée depuis un événement métier",
+  "stage.validated": "Étape validée",
+  "request.created": "Demande créée",
+  "request.take": "Demande prise en charge",
+  "request.respond": "Réponse apportée",
+  "request.resolve": "Demande résolue",
+  "request.reopen": "Demande rouverte",
+  "request.cancel": "Demande annulée",
+};
+const stageStateNames: Record<Workflow["stages"][number]["state"], string> = {
+  a_venir: "À venir",
+  en_cours: "En cours",
+  taches_terminees: "Tâches terminées",
+  validee: "Étape validée",
+};
+function EpisodeWorkflow({
+  id,
+  role,
+  zone,
+  enabled,
+}: {
+  id: string;
+  role: Organizer["role"];
+  zone: string | null;
+  enabled: boolean;
+}) {
+  const [data, setData] = useState<Workflow | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [subject, setSubject] = useState("");
+  const [question, setQuestion] = useState("");
+  const [responses, setResponses] = useState<Record<string, string>>({});
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftStage, setDraftStage] = useState(3);
+  const [expandedStages, setExpandedStages] = useState<Record<number, boolean>>(
+    {},
+  );
+  const [requestsOpen, setRequestsOpen] = useState<boolean | null>(null);
+  const load = () => {
+    if (enabled)
+      void api<Workflow>(`/episodes/${id}/workflow`)
+        .then(setData)
+        .catch((e) => setError(e.message));
+  };
+  useEffect(load, [id, enabled]);
+  async function run(path: string, method: string, payload: unknown) {
+    setBusy(true);
+    setError("");
+    try {
+      await api(path, { method, body: json(payload) });
+      if (path.includes("/requests")) setRequestsOpen(true);
+      load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (!enabled)
+    return (
+      <section className="card lot2-panel">
+        <h2>Parcours de l’épisode</h2>
+        <p>La Production y accède après transmission du dossier.</p>
+      </section>
+    );
+  return (
+    <section className="card lot2-panel lot3-workflow">
+      <h2>Parcours de l’épisode</h2>
+      {error && (
+        <p role="alert" className="lot2-warning">
+          {error}
+        </p>
+      )}
+      {!data ? (
+        <p>Chargement du parcours…</p>
+      ) : (
+        <>
+          <div className="lot3-overview" role="status">
+            <strong>
+              {data.progress.done}/{data.progress.total} tâches terminées
+            </strong>
+            <span>
+              {data.progress.remaining} obligatoires restantes ·{" "}
+              {data.progress.pending_requests} demandes en attente
+            </span>
+            <small>
+              {data.progress.attention_stage
+                ? `À suivre : ${data.progress.attention_stage}. ${journey[data.progress.attention_stage - 1]}`
+                : "Aucune action attribuée en attente"}
+            </small>
+            <progress
+              max={data.progress.total}
+              value={data.progress.done}
+              aria-label="Progression des tâches"
+            />
+          </div>
+          <div className="lot3-stages">
+            {journey.map((name, index) => (
+              <details
+                key={name}
+                open={
+                  expandedStages[index + 1] ??
+                  index + 1 === data.progress.attention_stage
+                }
+              >
+                <summary
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setExpandedStages((current) => ({
+                      ...current,
+                      [index + 1]: !(
+                        current[index + 1] ??
+                        index + 1 === data.progress.attention_stage
+                      ),
+                    }));
+                  }}
+                >
+                  <strong>
+                    {index + 1}. {name}
+                  </strong>
+                  <span>
+                    {data.stages[index]?.done}/{data.stages[index]?.total}{" "}
+                    tâches · {stageStateNames[data.stages[index]?.state]}
+                  </span>
+                </summary>
+                {data.stages[index]?.ready &&
+                  !data.stages[index]?.completed &&
+                  role ===
+                    ([1, 2, 6].includes(index + 1)
+                      ? "RESPONSABLE"
+                      : "PRODUCTION") && (
+                    <button
+                      className="lot2-button"
+                      disabled={busy}
+                      onClick={() =>
+                        void run(
+                          `/episodes/${id}/stages/${index + 1}/validate`,
+                          "POST",
+                          { expected_version: data.stages[index].version },
+                        )
+                      }
+                    >
+                      Valider l’étape
+                    </button>
+                  )}
+                <div className="lot3-task-list">
+                  {data.tasks
+                    .filter((t) => t.stage === index + 1)
+                    .map((task) => (
+                      <article key={task.id} className="lot3-task">
+                        <div>
+                          <strong>{task.title}</strong>
+                          <small>
+                            {task.required ? "Obligatoire" : "Facultative"} ·{" "}
+                            {task.owner_role === "RESPONSABLE"
+                              ? "Responsable"
+                              : "Production"}{" "}
+                            · {task.status.replaceAll("_", " ")}
+                            {task.due_at
+                              ? ` · ${formatDate(task.due_at, zone)}`
+                              : ""}
+                          </small>
+                          {task.comment && <p>{task.comment}</p>}
+                        </div>
+                        {task.owner_role === role && (
+                          <div className="lot3-actions">
+                            <select
+                              aria-label={`Statut de ${task.title}`}
+                              disabled={busy}
+                              value={task.status}
+                              onChange={(e) =>
+                                void run(
+                                  `/episodes/${id}/tasks/${task.id}`,
+                                  "PATCH",
+                                  {
+                                    expected_version: task.version,
+                                    status: e.target.value,
+                                  },
+                                )
+                              }
+                            >
+                              <option value="a_faire">À faire</option>
+                              <option value="en_cours">En cours</option>
+                              <option value="bloquee">Bloquée</option>
+                              <option value="terminee">Terminée</option>
+                            </select>
+                            <button
+                              className="lot2-button subtle"
+                              disabled={busy}
+                              onClick={() => {
+                                const comment = window.prompt(
+                                  "Commentaire interne",
+                                  task.comment ?? "",
+                                );
+                                if (comment !== null)
+                                  void run(
+                                    `/episodes/${id}/tasks/${task.id}`,
+                                    "PATCH",
+                                    { expected_version: task.version, comment },
+                                  );
+                              }}
+                            >
+                              Commenter
+                            </button>
+                          </div>
+                        )}
+                        {task.owner_role === role && (
+                          <details className="lot3-task-edit">
+                            <summary>Adapter la tâche</summary>
+                            <form
+                              className="lot3-inline-form"
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                const fields = new FormData(e.currentTarget);
+                                const localDue = String(
+                                  fields.get("due") ?? "",
+                                ).trim();
+                                const parsedDue = localDue
+                                  ? localToApi(localDue)
+                                  : null;
+                                if (localDue && !parsedDue) {
+                                  setError(
+                                    "Échéance invalide. Utilisez jj/mm/aaaa HH:mm.",
+                                  );
+                                  return;
+                                }
+                                void run(
+                                  `/episodes/${id}/tasks/${task.id}`,
+                                  "PATCH",
+                                  {
+                                    expected_version: task.version,
+                                    title: String(fields.get("title")),
+                                    owner_role: String(fields.get("owner")),
+                                    required: fields.get("required") === "on",
+                                    due_local: parsedDue,
+                                  },
+                                );
+                              }}
+                            >
+                              <label>
+                                Intitulé
+                                <input
+                                  name="title"
+                                  required
+                                  minLength={3}
+                                  defaultValue={task.title}
+                                />
+                              </label>
+                              <label>
+                                Responsable
+                                <select
+                                  name="owner"
+                                  defaultValue={task.owner_role}
+                                >
+                                  <option value="RESPONSABLE">
+                                    Responsable
+                                  </option>
+                                  <option value="PRODUCTION">Production</option>
+                                </select>
+                              </label>
+                              <label className="lot3-checkbox">
+                                <input
+                                  type="checkbox"
+                                  name="required"
+                                  defaultChecked={task.required}
+                                />{" "}
+                                Tâche obligatoire
+                              </label>
+                              <label>
+                                Échéance ({zone ?? "Europe/Paris"})
+                                <input
+                                  name="due"
+                                  placeholder="jj/mm/aaaa HH:mm"
+                                  defaultValue={localInput(
+                                    task.due_at,
+                                    zone ?? "Europe/Paris",
+                                  )}
+                                />
+                              </label>
+                              <button className="lot2-button" disabled={busy}>
+                                Enregistrer la tâche
+                              </button>
+                            </form>
+                          </details>
+                        )}
+                      </article>
+                    ))}
+                </div>
+              </details>
+            ))}
+          </div>
+          <details className="lot3-extra">
+            <summary>Ajouter une tâche propre à cet épisode</summary>
+            <form
+              className="lot3-inline-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void run(`/episodes/${id}/tasks`, "POST", {
+                  stage: draftStage,
+                  title: draftTitle,
+                  required: false,
+                  owner_role: role,
+                }).then(() => setDraftTitle(""));
+              }}
+            >
+              <label>
+                Étape
+                <select
+                  value={draftStage}
+                  onChange={(e) => setDraftStage(Number(e.target.value))}
+                >
+                  {journey.map((name, i) => (
+                    <option value={i + 1} key={name}>
+                      {i + 1}. {name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Intitulé
+                <input
+                  required
+                  minLength={3}
+                  value={draftTitle}
+                  onChange={(e) => setDraftTitle(e.target.value)}
+                />
+              </label>
+              <button className="lot2-button" disabled={busy}>
+                Ajouter
+              </button>
+            </form>
+          </details>
+          <div className="lot3-columns">
+            <details
+              className="lot3-extra"
+              open={requestsOpen ?? data.progress.pending_requests > 0}
+            >
+              <summary
+                onClick={(e) => {
+                  e.preventDefault();
+                  setRequestsOpen(
+                    (current) =>
+                      !(current ?? data.progress.pending_requests > 0),
+                  );
+                }}
+              >
+                Demandes internes · {data.progress.pending_requests} en attente
+              </summary>
+              <p className="muted">
+                La Responsable reste l’unique interlocutrice de l’intervenant.
+              </p>
+              {data.requests.length === 0 && <p>Aucune demande.</p>}
+              {data.requests.map((request) => (
+                <article className="lot3-request" key={request.id}>
+                  <strong>{request.subject}</strong>
+                  <small>
+                    {request.status}
+                    {request.due_at
+                      ? ` · ${formatDate(request.due_at, zone)}`
+                      : ""}
+                  </small>
+                  <p>{request.question}</p>
+                  {request.response && (
+                    <p>
+                      <strong>Réponse :</strong> {request.response}
+                    </p>
+                  )}
+                  {role === "RESPONSABLE" &&
+                    ["ouverte", "prise_en_charge", "répondue"].includes(
+                      request.status,
+                    ) && (
+                      <>
+                        <textarea
+                          aria-label={`Réponse à ${request.subject}`}
+                          value={responses[request.id] ?? ""}
+                          onChange={(e) =>
+                            setResponses({
+                              ...responses,
+                              [request.id]: e.target.value,
+                            })
+                          }
+                        />
+                        <button
+                          className="lot2-button"
+                          disabled={busy || !responses[request.id]?.trim()}
+                          onClick={() =>
+                            void run(
+                              `/requests/${request.id}/respond`,
+                              "POST",
+                              {
+                                expected_version: request.version,
+                                response: responses[request.id],
+                              },
+                            )
+                          }
+                        >
+                          Répondre
+                        </button>
+                      </>
+                    )}
+                  {role === "PRODUCTION" && request.status === "répondue" && (
+                    <button
+                      className="lot2-button"
+                      disabled={busy}
+                      onClick={() =>
+                        void run(`/requests/${request.id}/resolve`, "POST", {
+                          expected_version: request.version,
+                        })
+                      }
+                    >
+                      Résoudre
+                    </button>
+                  )}
+                </article>
+              ))}
+              <form
+                className="lot3-inline-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void run(`/episodes/${id}/requests`, "POST", {
+                    subject,
+                    question,
+                  }).then(() => {
+                    setSubject("");
+                    setQuestion("");
+                  });
+                }}
+              >
+                <h3>Demander une précision</h3>
+                <label>
+                  Objet
+                  <input
+                    required
+                    minLength={3}
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Question
+                  <textarea
+                    required
+                    minLength={3}
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                  />
+                </label>
+                <button className="lot2-button" disabled={busy}>
+                  Envoyer à la Responsable
+                </button>
+              </form>
+            </details>
+            <details className="lot3-extra">
+              <summary>
+                Historique du parcours · {data.history.length} actions
+              </summary>
+              <ol className="lot3-history">
+                {data.history.map((entry) => (
+                  <li key={entry.id}>
+                    <strong>
+                      {workflowActionNames[entry.action] ??
+                        "Action sur le parcours"}
+                    </strong>
+                    <small>
+                      {entry.actor_name ?? "Organisateur"} ·{" "}
+                      {formatDate(entry.occurred_at, zone)}
+                    </small>
+                    {entry.subject_type === "task" && (
+                      <span>
+                        {data.tasks.find((task) => task.id === entry.subject_id)
+                          ?.title ?? "Tâche"}
+                      </span>
+                    )}
+                    {entry.subject_type === "request" && (
+                      <span>
+                        {data.requests.find(
+                          (request) => request.id === entry.subject_id,
+                        )?.subject ?? "Demande"}
+                      </span>
+                    )}
+                    {entry.subject_type === "stage" && (
+                      <span>Étape du parcours</span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </details>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 export function EpisodePage({ organizer }: { organizer: Organizer }) {
   const { id } = useParams();
   const [item, setItem] = useState<EpisodeDetail | null>(null);
@@ -1668,30 +2215,26 @@ export function EpisodePage({ organizer }: { organizer: Organizer }) {
           )}
           {organizer.role === "PRODUCTION" && item.handed_off_at && (
             <p className="lot2-success">
-              Dossier reçu. Les demandes de précision internes seront
-              disponibles au Lot 3.
+              Dossier reçu. Le parcours et les demandes internes sont
+              accessibles ci-dessous.
             </p>
           )}
         </section>
       </div>
-      <div className="lot2-columns lot2-section">
-        <section className="card lot2-panel">
-          <h2>Parcours de l’épisode</h2>
-          <p className="muted">
-            Les huit étapes servent de repère. Leurs tâches et validations
-            arrivent au Lot 3.
-          </p>
-          <ol className="lot2-journey">
-            {journey.map((stage, index) => (
-              <li key={stage}>
-                <span>{index + 1}</span>
-                {stage}
-              </li>
-            ))}
-          </ol>
-        </section>
-        <Timeline items={events} />
+      <div className="lot2-section">
+        <EpisodeWorkflow
+          id={item.id}
+          role={organizer.role}
+          zone={item.event_timezone}
+          enabled={
+            organizer.role === "RESPONSABLE" || Boolean(item.handed_off_at)
+          }
+        />
       </div>
+      <details className="lot3-extra lot3-dossier-history">
+        <summary>Historique du dossier · {events.length} actions</summary>
+        <Timeline items={events} />
+      </details>
     </>
   );
 }
@@ -1725,6 +2268,53 @@ export function ProductionInbox() {
       ) : (
         <p className="muted">Aucun dossier transmis pour le moment.</p>
       )}
+    </section>
+  );
+}
+
+export function WorkflowInbox() {
+  const [items, setItems] = useState<
+    { id: string; episode_id: string; kind: string; read_at: string | null }[]
+  >([]);
+  const [error, setError] = useState("");
+  const load = () => {
+    void api<{ items: typeof items }>("/workflow-notifications")
+      .then((data) => setItems(data.items))
+      .catch((e) => setError(e.message));
+  };
+  useEffect(load, []);
+  if (!items.length && !error) return null;
+  const labels: Record<string, string> = {
+    REQUEST_CREATED: "Nouvelle demande de précision",
+    REQUEST_RESPOND: "Réponse à une demande",
+    REQUEST_REOPEN: "Demande rouverte",
+    TASK_ASSIGNED: "Tâche attribuée",
+  };
+  return (
+    <section className="card lot2-panel lot2-section">
+      <h2>Notifications internes</h2>
+      <Feedback error={error} />
+      {items.slice(0, 6).map((item) => (
+        <div className="lot2-related" key={item.id}>
+          <Link to={`/episodes/${item.episode_id}`}>
+            {labels[item.kind] ?? item.kind} · voir l’épisode
+          </Link>
+          {!item.read_at && (
+            <button
+              className="lot2-button subtle"
+              onClick={() =>
+                void api(`/workflow-notifications/${item.id}/read`, {
+                  method: "POST",
+                })
+                  .then(load)
+                  .catch((e) => setError(e.message))
+              }
+            >
+              Marquer comme lu
+            </button>
+          )}
+        </div>
+      ))}
     </section>
   );
 }

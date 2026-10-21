@@ -196,3 +196,24 @@ Les listes renvoient `{ "items": [...], "next_offset": nombre|null }` avec `limi
 La date envisagée et la date confirmée sont distinctes ; les heures locales inexistantes ou doubles lors du changement d'heure sont rejetées. Un dossier ne peut être transmis que confirmé et avec poste/entreprise renseignés. Un second relais ne crée pas de seconde notification. L'upload R2, les tâches, les publications et le feedback ne sont pas des routes livrées au Lot 2.
 
 Le relais **ne requiert pas de portrait ni d'autorisation d'usage** : ces éléments restent explicitement à compléter dans le dossier Production. Pour le futur Lot 4, toute route serveur qui valide, exporte comme affiche prête à diffuser ou constate la publication d'un contenu **utilisant un portrait** devra vérifier une ressource privée liée au bon intervenant, `rights_status=granted`, un consentement actif pour la finalité exacte (annonce ou remerciement), sa portée et une référence de preuve. `unknown`, `requested`, `refused`, `revoked`, absence de consentement ou changement de portrait/consentement après validation doivent bloquer l'action ou invalider cette validation. Un contrôle de bouton React ne suffit pas. Aucune route de publication ou d'export de portrait n'existe au Lot 2.
+## Routes livrées au Lot 3 (local)
+
+Toutes les routes ci-dessous sont sous `/api/v1`, exigent une session active et n'exposent à Production que les épisodes transmis.
+
+| Route | Comportement |
+|---|---|
+| `GET /episodes/:id/workflow` | Huit étapes, tâches, demandes, progression et événements du parcours. Initialise le snapshot des tâches à la première lecture et synchronise les seules tâches prédéfinies intactes appuyées par des événements métier vérifiables. |
+| `POST /episodes/:id/tasks` | Ajout d'une tâche propre au dossier (étape, titre, caractère obligatoire, rôle, échéance ISO avec offset facultative). |
+| `PATCH /episodes/:id/tasks/:taskId` | État, titre, propriétaire, caractère obligatoire, échéance, commentaire ; `expected_version` requis, propriétaire courant seul autorisé. |
+| `POST /episodes/:id/stages/:number/validate` | Validation explicite par le rôle principal après achèvement des tâches obligatoires ; `expected_version` requis. |
+| `POST /episodes/:id/requests` | Demande interne ; destinataire fixé côté serveur à la Responsable. |
+| `POST /requests/:id/take`, `/respond`, `/resolve`, `/reopen`, `/cancel` | Transitions de demande avec version attendue ; réponse par Responsable, résolution par demandeur. |
+| `GET /workflow-notifications`, `POST /workflow-notifications/:id/read` | Notifications du compte courant et lecture idempotente. |
+
+`409` signale version périmée, étape non prête, transition interdite ou fonctionnalité hors Lot 3. `403` protège les actions d'un autre rôle. Les tâches « publication », « présence », « replay » et « partage feedback » ne peuvent pas être déclarées terminées par cette API avant leurs modules métier. Aucun endpoint ne contacte l'alumni ni ne publie sur un canal externe.
+
+Pour modifier une échéance de tâche depuis l'interface, `PATCH /episodes/:id/tasks/:taskId` accepte aussi `due_local` au format `YYYY-MM-DDTHH:mm` (ou `null` pour vider). La date est résolue côté serveur dans le fuseau IANA de l'épisode ; une heure inexistante ou ambiguë reçoit `422`. Une échéance manuelle cesse de suivre les reports automatiques.
+
+Une répétition de la même réponse avec la version courante renvoie la demande existante et `notification_created:false`. Les notifications Lot 3 sont uniques par événement et destinataire. Une demande volontairement créée deux fois reste deux demandes distinctes ; l'interface n'automatise pas leur création.
+
+Chaque étape expose `state` (`a_venir`, `en_cours`, `taches_terminees`, `validee`) séparément de `ready` et `completed`. `progress` inclut l'étape nécessitant l'attention du rôle connecté, les tâches obligatoires restantes et les demandes en attente. Les événements renvoient `actor_name` pour l'affichage français ; leurs codes techniques restent conservés. La lecture d'une notification est idempotente pour son destinataire et renvoie `404` à un autre compte.

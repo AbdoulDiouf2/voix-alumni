@@ -301,3 +301,156 @@ export const mediaAssets = pgTable(
     index("media_assets_episode_idx").on(table.episodeId),
   ],
 );
+
+export const episodeTasks = pgTable(
+  "episode_tasks",
+  {
+    id: text("id").primaryKey(),
+    episodeId: text("episode_id")
+      .notNull()
+      .references(() => episodes.id, { onDelete: "cascade" }),
+    definitionKey: text("definition_key").notNull(),
+    templateVersion: integer("template_version").notNull().default(1),
+    stage: integer("stage").notNull(),
+    title: text("title").notNull(),
+    required: boolean("required").notNull(),
+    ownerRole: text("owner_role").notNull(),
+    status: text("status").notNull().default("a_faire"),
+    dueOffsetDays: integer("due_offset_days"),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    scheduleVersion: integer("schedule_version"),
+    comment: text("comment"),
+    completedBy: text("completed_by").references(() => user.id, {
+      onDelete: "restrict",
+    }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    updatedBy: text("updated_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    version: integer("version").notNull().default(1),
+  },
+  (table) => [
+    uniqueIndex("episode_tasks_definition_idx").on(
+      table.episodeId,
+      table.definitionKey,
+    ),
+    index("episode_tasks_due_idx").on(table.status, table.dueAt),
+  ],
+);
+
+export const informationRequests = pgTable(
+  "information_requests",
+  {
+    id: text("id").primaryKey(),
+    episodeId: text("episode_id")
+      .notNull()
+      .references(() => episodes.id, { onDelete: "cascade" }),
+    requestedById: text("requested_by_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    assignedToId: text("assigned_to_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    subject: text("subject").notNull(),
+    question: text("question").notNull(),
+    status: text("status").notNull().default("ouverte"),
+    responseText: text("response_text"),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    respondedBy: text("responded_by").references(() => user.id, {
+      onDelete: "restrict",
+    }),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+    resolvedBy: text("resolved_by").references(() => user.id, {
+      onDelete: "restrict",
+    }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    version: integer("version").notNull().default(1),
+  },
+  (table) => [
+    index("information_requests_assignee_idx").on(
+      table.assignedToId,
+      table.status,
+    ),
+  ],
+);
+
+export const workflowEvents = pgTable(
+  "workflow_events",
+  {
+    id: text("id").primaryKey(),
+    episodeId: text("episode_id")
+      .notNull()
+      .references(() => episodes.id, { onDelete: "cascade" }),
+    subjectType: text("subject_type").notNull(),
+    subjectId: text("subject_id").notNull(),
+    action: text("action").notNull(),
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    details: text("details"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("workflow_events_episode_idx").on(table.episodeId, table.occurredAt),
+  ],
+);
+
+export const workflowNotifications = pgTable(
+  "workflow_notifications",
+  {
+    id: text("id").primaryKey(),
+    episodeId: text("episode_id")
+      .notNull()
+      .references(() => episodes.id, { onDelete: "cascade" }),
+    recipientUserId: text("recipient_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    eventId: text("event_id")
+      .notNull()
+      .references(() => workflowEvents.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("workflow_notifications_event_recipient_idx").on(
+      table.eventId,
+      table.recipientUserId,
+    ),
+  ],
+);
+
+export const episodeStages = pgTable(
+  "episode_stages",
+  {
+    id: text("id").primaryKey(),
+    episodeId: text("episode_id")
+      .notNull()
+      .references(() => episodes.id, { onDelete: "cascade" }),
+    number: integer("number").notNull(),
+    validatedAt: timestamp("validated_at", { withTimezone: true }),
+    validatedBy: text("validated_by").references(() => user.id, {
+      onDelete: "restrict",
+    }),
+    version: integer("version").notNull().default(1),
+  },
+  (table) => [
+    uniqueIndex("episode_stages_episode_number_idx").on(
+      table.episodeId,
+      table.number,
+    ),
+  ],
+);

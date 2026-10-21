@@ -43,6 +43,7 @@ import {
   EpisodeNew,
   EpisodePage,
   ProductionInbox,
+  WorkflowInbox,
   type Episode,
 } from "./Lot2";
 
@@ -316,6 +317,7 @@ function Dashboard({ organizer }: { organizer: Organizer }) {
         }
       />
       {organizer.role === "PRODUCTION" && <ProductionInbox />}
+      <WorkflowInbox />
       <div className="dashboard-grid">
         <section className="hero-card card">
           <div className="hero-copy">
