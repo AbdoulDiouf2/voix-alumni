@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX "organizer_one_active_per_role_idx" ON "organizer_memberships" USING btree ("role") WHERE "organizer_memberships"."active" = true;--> statement-breakpoint
+ALTER TABLE "organizer_memberships" ADD CONSTRAINT "organizer_role_allowed" CHECK ("organizer_memberships"."role" in ('RESPONSABLE', 'PRODUCTION'));

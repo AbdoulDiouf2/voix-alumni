@@ -1,0 +1,26 @@
+{
+  "name": "@voix-alumni/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file=../../.env --import tsx --watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --env-file-if-exists=../../.env.test ../../node_modules/vitest/vitest.mjs run",
+    "admin": "node --env-file=../../.env --import tsx src/admin.ts"
+  },
+  "dependencies": {
+    "@better-auth/drizzle-adapter": "1.7.12",
+    "@hono/node-server": "2.1.5",
+    "@voix-alumni/contracts": "0.0.0",
+    "@voix-alumni/db": "0.0.0",
+    "better-auth": "1.7.12",
+    "drizzle-orm": "0.45.4",
+    "hono": "4.13.13"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15",
+    "vitest": "5.0.5"
+  }
+}
