@@ -289,3 +289,9 @@ Ce journal est chronologique et **append-only** : ajouter de nouvelles entrées 
 - **Tests après correction :** format, lint, typecheck, build réussis ; Playwright complet Lots 1–3 : 15 réussites, 1 ignoré mobile sur desktop, 0 échec. Captures régénérées sans changement visuel restaurées depuis Git. `git diff --check` réussi. API non relancée dans cette intervention car seul le CSS et l'assertion E2E ont changé ; 16/16 tests API du commit `e603698` restent issus de la passe précédente.
 - **Secrets :** 104 fichiers suivis contrôlés ; aucun fichier `.env` privé ni clé privée par nom, aucune signature de clé privée, clé AWS, jeton GitHub, clé Google ou JWT dans les contenus textuels. Cette recherche par motifs ne constitue pas une garantie exhaustive.
 - **Git et suite :** correction locale à commiter avant push ; ancien HEAD `e603698` deviendra l'ancêtre du nouveau commit. Aucun push, PR, merge ou déploiement effectué à cet instant ; Lot 4 bloqué.
+
+## 2026-10-21 15:09 Europe/Paris — Publication de la branche du Lot 3
+
+- **Git vérifié :** correction mobile et registres commités dans `de10d7e`, enfant direct de `e603698`. Arbre propre après commit. `git push -u origin feat/lot-3-workflows` réussi ; `git ls-remote --heads` confirme `de10d7e478b4ef2be3a2c93608641c75f0c04542` sur cette branche, identique au HEAD local.
+- **Actions externes :** seul le push de `feat/lot-3-workflows` autorisé a été exécuté. Aucune PR, fusion, publication de `main` ou déploiement. Cette mise à jour documentaire de traçabilité sera commitée et poussée sur la même branche, sans réécriture de l'historique.
+- **Suite :** vérifier à nouveau le SHA distant après ce commit documentaire ; attendre les prochaines instructions. Lot 4 bloqué.

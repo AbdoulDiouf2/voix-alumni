@@ -5,7 +5,7 @@
 ## Lot, phase et Git
 
 - **Lot actuel :** Lot 3 validé fonctionnellement pour passage en Pull Request ; vérification mobile préalable au push réalisée, avec une correction ciblée. Lot 4 bloqué.
-- **Branche :** `feat/lot-3-workflows`, commit de clôture antérieur `e603698` vérifié propre avant contrôle mobile. Correction mobile et registres locaux à commiter puis pousser uniquement sur cette branche. Aucun PR, merge ni déploiement.
+- **Branche :** `feat/lot-3-workflows`, commit de clôture antérieur `e603698` vérifié propre avant contrôle mobile. Correction mobile commitée dans `de10d7e` et branche poussée sur GitHub ; SHA distant `de10d7e478b4ef2be3a2c93608641c75f0c04542` vérifié par `git ls-remote`. Mise à jour documentaire de cette publication à commiter sur la même branche. Aucun PR, merge ni déploiement.
 - **Périmètre :** seul le dépôt Voix d'Alumni est modifié. La maquette HTML est inchangée, SHA-256 vérifié `5c65b156ca85f517b9328b8843e16739602371bdf3bb0d80b89bf1a6cc3e1b5c`.
 
 ## Fonctionnalités terminées et vérifiées localement
@@ -34,4 +34,4 @@
 ## Décisions en attente et prochaine action
 
 - Confirmer l'heure réelle de la session du 25 octobre, préparer la source d'import historique 1–11 et les futurs buckets R2 seulement aux lots autorisés. Les actions métier de publication et de replay requièrent les lots suivants.
-- **Prochaine action concrète :** commiter la correction mobile, vérifier l'arbre Git et les fichiers suivis, pousser uniquement `feat/lot-3-workflows`, vérifier son SHA distant, puis attendre l'autorisation du propriétaire pour toute autre action. Aucun déploiement ni Lot 4.
+- **Prochaine action concrète :** commiter et pousser la traçabilité post-publication, confirmer le SHA distant définitif, puis attendre les prochaines instructions du propriétaire. Aucun déploiement ni Lot 4.
