@@ -1996,6 +1996,10 @@ export function EpisodePage({ organizer }: { organizer: Organizer }) {
             <Link to={`/communications?episode=${item.id}`}>
               Communications ↗
             </Link>
+            <Link to={`/episodes/${item.id}/session`}>Réunion et jour J ↗</Link>
+            <Link to={`/episodes/${item.id}/feedback`}>
+              Feedback et résultats ↗
+            </Link>
           </>
         )}
       </div>

@@ -165,3 +165,21 @@ Aucune décision remplacée n'est identifiée dans les preuves disponibles **dep
 - **Conséquences :** validation éditoriale, export et publication restent trois événements distincts ; aucune diffusion externe n’est effectuée par l’application. L’historique expose aussi l’auteur de la publication.
 - **Statut :** appliquée et testée localement ; diffusion externe réelle non effectuée.
 - **Source :** instruction explicite de validation finale du Lot 4 et rôle Production défini dans `Docs/02_WORKFLOWS_ET_REGLES_METIER.md`.
+
+## DEC-016 — Ouverture du feedback natif et validation des variantes
+
+- **Date :** 2026-10-22 ; instruction explicite du propriétaire pour le Lot 5.
+- **Contexte :** le questionnaire standard doit être rapide à ouvrir sans supprimer la relecture des modifications ni la porte de confidentialité.
+- **Décision :** le modèle standard approuvé comporte six questions, seule la note de 1 à 5 étant obligatoire. Production peut ouvrir directement, après confirmation explicite, une instance inchangée du modèle **et de sa notice approuvée**. Toute modification des questions ou de la notice exige une validation Responsable de la version concernée. L'ouverture d'un formulaire public demeure un événement distinct de la validation du modèle.
+- **Conséquences :** chaque version et chaque réponse conservent leur rattachement ; aucune notice de recette n'autorise l'ouverture à de vrais participants. La durée de rétention et le texte de notice réels doivent être approuvés avant cette ouverture.
+- **Statut :** décision approuvée ; implémentation locale testée sur bases isolées, validation humaine du Lot 5 et notice réelle encore attendues.
+- **Source :** autorisation du Lot 5 fournie le 2026-10-22.
+
+## DEC-017 — Preuve métier de séance, citation et archive au Lot 5
+
+- **Date :** 2026-10-22 ; découle des exigences explicites du Lot 5.
+- **Contexte :** un lien Teams ouvert, une heure écoulée, une case `quote_approved` dans un brouillon ou un replay simplement référencé ne prouvent ni la séance tenue, ni une citation authentifiée, ni la diffusion autorisée.
+- **Décision :** seule la Responsable constate explicitement la tenue ; l'approbation d'une affiche de remerciement citant l'intervenant exige une citation exacte approuvée en base, avec provenance. Un replay déclaré disponible exige les droits d'enregistrement et de diffusion accordés avec preuve. La clôture est préparée par Production et approuvée par Responsable après vérification de la checklist ; les absences admises exigent une exception motivée persistée. Les tâches prédéfinies intactes peuvent se synchroniser sur ces preuves sans valider l'étape.
+- **Conséquences :** la recette Lot 4 de citation fictive crée désormais aussi un enregistrement de citation validé ; les anciennes affiches approuvées restent consultables, mais toute nouvelle approbation passe le contrôle actuel. Un report suspend les rappels pendants jusqu'à reconfirmation et conserve les rappels déjà exécutés.
+- **Statut :** implémentation locale testée ; usage réel et validation humaine du Lot 5 attendus.
+- **Source :** autorisation Lot 5, sections Jour J, transcription/citations, clôture et intégration au parcours.

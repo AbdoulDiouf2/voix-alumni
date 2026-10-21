@@ -585,3 +585,294 @@ export const episodeStages = pgTable(
     ),
   ],
 );
+
+// Lot 5: operational session, anonymous feedback and reviewed archive.
+export const sessionPlans = pgTable("session_plans", {
+  episodeId: text("episode_id")
+    .primaryKey()
+    .references(() => episodes.id, { onDelete: "cascade" }),
+  teamsUrl: text("teams_url"),
+  fallbackUrl: text("fallback_url"),
+  accessStatus: text("access_status").notNull().default("a_verifier"),
+  accessCheckedBy: text("access_checked_by").references(() => user.id),
+  accessCheckedAt: timestamp("access_checked_at", { withTimezone: true }),
+  scheduleVersion: integer("schedule_version").notNull(),
+  conductorVersion: integer("conductor_version").notNull().default(1),
+  conductorApprovedVersion: integer("conductor_approved_version"),
+  conductorApprovedBy: text("conductor_approved_by").references(() => user.id),
+  conductorApprovedAt: timestamp("conductor_approved_at", {
+    withTimezone: true,
+  }),
+  version: integer("version").notNull().default(1),
+  updatedBy: text("updated_by")
+    .notNull()
+    .references(() => user.id),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export const sessionQuestions = pgTable(
+  "session_questions",
+  {
+    id: text("id").primaryKey(),
+    episodeId: text("episode_id")
+      .notNull()
+      .references(() => episodes.id, { onDelete: "cascade" }),
+    originKey: text("origin_key"),
+    text: text("text").notNull(),
+    sortOrder: integer("sort_order").notNull(),
+    priority: text("priority").notNull().default("normale"),
+    durationMinutes: integer("duration_minutes"),
+    privateNote: text("private_note"),
+    version: integer("version").notNull().default(1),
+    updatedBy: text("updated_by")
+      .notNull()
+      .references(() => user.id),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("session_questions_episode_order_idx").on(
+      table.episodeId,
+      table.sortOrder,
+    ),
+  ],
+);
+
+export const sessionReminders = pgTable(
+  "session_reminders",
+  {
+    id: text("id").primaryKey(),
+    episodeId: text("episode_id")
+      .notNull()
+      .references(() => episodes.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    offsetDays: integer("offset_days").notNull(),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    scheduleVersion: integer("schedule_version").notNull(),
+    status: text("status").notNull().default("a_preparer"),
+    completedBy: text("completed_by").references(() => user.id),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    version: integer("version").notNull().default(1),
+  },
+  (table) => [
+    uniqueIndex("session_reminders_episode_key_idx").on(
+      table.episodeId,
+      table.key,
+    ),
+  ],
+);
+
+export const feedbackForms = pgTable("feedback_forms", {
+  id: text("id").primaryKey(),
+  episodeId: text("episode_id")
+    .notNull()
+    .unique()
+    .references(() => episodes.id, { onDelete: "restrict" }),
+  status: text("status").notNull().default("brouillon"),
+  currentVersion: integer("current_version").notNull().default(1),
+  tokenHash: text("token_hash").unique(),
+  tokenGeneration: integer("token_generation").notNull().default(0),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  retentionDays: integer("retention_days"),
+  openedAt: timestamp("opened_at", { withTimezone: true }),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  version: integer("version").notNull().default(1),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => user.id),
+  updatedBy: text("updated_by")
+    .notNull()
+    .references(() => user.id),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export const feedbackPolicies = pgTable("feedback_policies", {
+  key: text("key").primaryKey(),
+  version: integer("version").notNull().default(1),
+  noticeText: text("notice_text").notNull(),
+  retentionDays: integer("retention_days").notNull(),
+  approvedBy: text("approved_by")
+    .notNull()
+    .references(() => user.id),
+  approvedAt: timestamp("approved_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export const feedbackFormVersions = pgTable(
+  "feedback_form_versions",
+  {
+    id: text("id").primaryKey(),
+    formId: text("form_id")
+      .notNull()
+      .references(() => feedbackForms.id, { onDelete: "restrict" }),
+    number: integer("number").notNull(),
+    modelVersion: integer("model_version").notNull().default(1),
+    questionsJson: text("questions_json").notNull(),
+    noticeText: text("notice_text").notNull(),
+    noticeVersion: integer("notice_version").notNull().default(1),
+    standardUnchanged: boolean("standard_unchanged").notNull().default(false),
+    approvedBy: text("approved_by").references(() => user.id),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("feedback_versions_form_number_idx").on(
+      table.formId,
+      table.number,
+    ),
+  ],
+);
+
+export const feedbackResponses = pgTable(
+  "feedback_responses",
+  {
+    id: text("id").primaryKey(),
+    formId: text("form_id")
+      .notNull()
+      .references(() => feedbackForms.id, { onDelete: "restrict" }),
+    formVersionId: text("form_version_id")
+      .notNull()
+      .references(() => feedbackFormVersions.id, { onDelete: "restrict" }),
+    source: text("source").notNull(),
+    answersJson: text("answers_json").notNull(),
+    dedupeHash: text("dedupe_hash"),
+    importId: text("import_id"),
+    submittedAt: timestamp("submitted_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    deletedBy: text("deleted_by").references(() => user.id),
+  },
+  (table) => [
+    uniqueIndex("feedback_responses_dedupe_idx").on(
+      table.formId,
+      table.dedupeHash,
+    ),
+    index("feedback_responses_form_idx").on(table.formId),
+  ],
+);
+
+export const feedbackImports = pgTable(
+  "feedback_imports",
+  {
+    id: text("id").primaryKey(),
+    formId: text("form_id")
+      .notNull()
+      .references(() => feedbackForms.id, { onDelete: "restrict" }),
+    fileHash: text("file_hash").notNull(),
+    mappingJson: text("mapping_json").notNull(),
+    reportJson: text("report_json").notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("feedback_imports_form_hash_idx").on(
+      table.formId,
+      table.fileHash,
+    ),
+  ],
+);
+
+export const episodeReplays = pgTable("episode_replays", {
+  episodeId: text("episode_id")
+    .primaryKey()
+    .references(() => episodes.id, { onDelete: "restrict" }),
+  youtubeUrl: text("youtube_url"),
+  videoId: text("video_id"),
+  visibility: text("visibility"),
+  status: text("status").notNull().default("a_verifier"),
+  recordingRights: text("recording_rights").notNull().default("unknown"),
+  diffusionRights: text("diffusion_rights").notNull().default("unknown"),
+  rightsEvidenceRef: text("rights_evidence_ref"),
+  checkedBy: text("checked_by").references(() => user.id),
+  checkedAt: timestamp("checked_at", { withTimezone: true }),
+  version: integer("version").notNull().default(1),
+  updatedBy: text("updated_by")
+    .notNull()
+    .references(() => user.id),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export const episodeTranscripts = pgTable(
+  "episode_transcripts",
+  {
+    id: text("id").primaryKey(),
+    episodeId: text("episode_id")
+      .notNull()
+      .references(() => episodes.id, { onDelete: "restrict" }),
+    version: integer("version").notNull(),
+    assetId: text("asset_id").references(() => mediaAssets.id, {
+      onDelete: "restrict",
+    }),
+    filename: text("filename").notNull(),
+    language: text("language").notNull(),
+    provenance: text("provenance").notNull(),
+    correctedText: text("corrected_text"),
+    reviewedBy: text("reviewed_by").references(() => user.id),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("episode_transcripts_episode_version_idx").on(
+      table.episodeId,
+      table.version,
+    ),
+  ],
+);
+
+export const episodeQuotes = pgTable("episode_quotes", {
+  id: text("id").primaryKey(),
+  episodeId: text("episode_id")
+    .notNull()
+    .references(() => episodes.id, { onDelete: "restrict" }),
+  transcriptId: text("transcript_id").references(() => episodeTranscripts.id, {
+    onDelete: "restrict",
+  }),
+  exactText: text("exact_text").notNull(),
+  sourceRef: text("source_ref").notNull(),
+  status: text("status").notNull().default("a_verifier"),
+  verifiedBy: text("verified_by").references(() => user.id),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  approvedBy: text("approved_by").references(() => user.id),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  version: integer("version").notNull().default(1),
+  createdBy: text("created_by")
+    .notNull()
+    .references(() => user.id),
+});
+
+export const episodeClosures = pgTable("episode_closures", {
+  episodeId: text("episode_id")
+    .primaryKey()
+    .references(() => episodes.id, { onDelete: "restrict" }),
+  status: text("status").notNull().default("a_preparer"),
+  exceptionsJson: text("exceptions_json").notNull().default("{}"),
+  preparedBy: text("prepared_by").references(() => user.id),
+  preparedAt: timestamp("prepared_at", { withTimezone: true }),
+  approvedBy: text("approved_by").references(() => user.id),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  version: integer("version").notNull().default(1),
+});

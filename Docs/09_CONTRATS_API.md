@@ -235,3 +235,26 @@ Toutes les routes exigent une session. Production ne voit que les épisodes tran
 | `GET /contents/:id/history` | Révisions et publications avec canal, version, auteur et horodatage, sans modifier le contenu. |
 
 Le stockage R2 utilise `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` dans l'environnement privé. L'endpoint doit être HTTPS et sous la juridiction `eu`. Aucun bucket ni identifiant n'est créé par l'application. `APP_ENV=test|e2e` active un adaptateur de fichiers isolé dans `/tmp` pour la recette ; ce résultat ne prouve aucun transfert R2 réel.
+
+## Routes locales du Lot 5 — réunion, feedback et post-production
+
+Toutes les routes `/api/v1` ci-dessous exigent une session Better Auth active. Production accède seulement aux épisodes transmis. Les mutations sensibles utilisent `expected_version` et renvoient `409` en cas de conflit. Les rôles indiqués sont vérifiés côté Hono.
+
+| Route | Rôle et effet |
+|---|---|
+| `GET /episodes/:id/operations` | Deux rôles ; réunion, conducteur, rappels, replay, transcriptions, citations, checklist et historique avec auteur. Synchronise les échéances encore pendantes au calendrier courant ; un report suspend les échéances sans date confirmée et préserve celles déjà exécutées. |
+| `PUT /episodes/:id/session-plan`, `POST /episodes/:id/session-plan/check-access` | Production ; lien Teams manuel et secours, vérification humaine explicite. Le report impose une nouvelle vérification. |
+| `POST /episodes/:id/questions/initialize`, `POST /episodes/:id/questions`, `PATCH /episodes/:id/questions/:questionId` | Production ; six questions communes, ajouts et adaptations du conducteur. Toute édition invalide sa validation courante. |
+| `POST /episodes/:id/conductor/approve`, `POST /episodes/:id/mark-held` | Responsable ; validation du conducteur et constat distinct de tenue effective de la session. |
+| `POST /episodes/:id/reminders/:key/complete` | Production ; préparation interne des rappels J-7, J-3, J-1, jour J et après-session, sans envoi externe. |
+| `GET/POST/PATCH /episodes/:id/feedback`, `POST /episodes/:id/feedback/approve`, `/open`, `/closed`, `/revoked` | Production crée/adapte/ouvre après confirmation ; Responsable approuve les variantes. Notice, rétention et validation requises avant ouverture. Jeton public haché en base ; les réponses sont attachées à la version présentée. |
+| `GET/POST /feedback/policy` | Lecture autorisée aux deux rôles ; approbation de la notice et de la rétention par Responsable uniquement. Le texte réel reste à approuver humainement. |
+| `GET /episodes/:id/feedback/responses`, `DELETE /episodes/:id/feedback/responses/:responseId`, `GET /episodes/:id/feedback/export.csv`, `GET /feedback/comparison` | Résultats privés ; suppression du contenu d'une réponse réservée à Responsable ; export et comparaison avec groupe de modèle explicite. |
+| `POST /episodes/:id/feedback/import/preview`, `/commit` | Production ; CSV Google Forms, mapping de colonnes, anomalies, doublons et import transactionnel idempotent. `commit` exige `confirmed:true`. |
+| `POST /feedback/retention/purge` | Responsable ; aperçu du nombre éligible par défaut, puis purge confirmée du contenu expiré selon la durée approuvée, avec audit. Aucun job automatique installé. |
+| `PUT /episodes/:id/replay` | Production ; URL/ID YouTube saisis manuellement. L'état disponible exige droits d'enregistrement et de diffusion accordés avec référence de preuve. |
+| `POST /episodes/:id/transcripts`, `GET /episodes/:id/transcripts/:transcriptId`, `POST /episodes/:id/transcripts/:transcriptId/review` | Production importe TXT/VTT/SRT UTF-8 privé ; consultation aux organisateurs, relecture et correction manuelle, version suivante par nouvel import. PDF non accepté faute d'extraction fiable. |
+| `POST /episodes/:id/quotes`, `POST /episodes/:id/quotes/:quoteId/approve` | Production propose avec provenance ; Responsable confirme le texte exact. L'approbation d'une affiche citant ce texte exige aussi une citation approuvée correspondante en base. |
+| `POST /episodes/:id/closure/prepare`, `/approve` | Production prépare avec exceptions motivées ; Responsable approuve seulement si checklist réelle satisfaite ou dérogations autorisées. L'archive conserve contenus, versions et historique. |
+
+Les seules routes publiques sont `GET /api/public/feedback/:token` et `POST /api/public/feedback/:token/responses`. Le jeton est opaque, dérivé d'un secret serveur et conservé seulement sous forme SHA-256 dans `feedback_forms`. La page ne renvoie que questions et notice. La réponse exige la version de notice et une clé d'idempotence, contrôle tous les types, limite les soumissions à 100 par formulaire et par heure et accepte un champ piège contre les robots simples. Un jeton fermé, expiré ou révoqué répond `410` ; ni les réponses privées ni les notes de préparation ne sont exposées. Cette limitation de débit ne garantit pas l'unicité de participants anonymes.

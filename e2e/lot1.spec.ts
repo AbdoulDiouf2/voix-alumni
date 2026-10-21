@@ -123,10 +123,12 @@ test("production sees its own dashboard and responsive navigation", async ({
       .getByRole("link", { name: "Feedback" })
       .click();
   }
-  await expect(page.getByRole("heading", { name: "Feedback" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Feedback des épisodes" }),
+  ).toBeVisible();
   await expect(
     page.getByText(
-      "Le formulaire natif et les réponses seront disponibles au Lot 5.",
+      "Les moyennes ne se comparent que pour les versions standard réellement identiques.",
     ),
   ).toBeVisible();
   const overflow = await page.evaluate(

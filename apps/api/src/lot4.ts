@@ -943,6 +943,14 @@ export function registerLot4Routes(app: Hono<BusinessEnv>, database: Database) {
       fields.quote_approved !== "true"
     )
       return c.json({ error: { code: "QUOTE_NOT_APPROVED" } }, 409);
+    if (content.kind === "thank_you_poster" && fields.quote) {
+      const approvedQuote = await database.pool.query(
+        "SELECT id FROM episode_quotes WHERE episode_id=$1 AND exact_text=$2 AND status='approved' LIMIT 1",
+        [content.episodeId, fields.quote],
+      );
+      if (!approvedQuote.rowCount)
+        return c.json({ error: { code: "VERIFIED_QUOTE_REQUIRED" } }, 409);
+    }
     if (
       (content.kind === "final_thanks" ||
         (content.kind === "thank_you_poster" && fields.replay_url)) &&

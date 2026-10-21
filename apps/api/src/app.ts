@@ -11,6 +11,11 @@ import type { auth as authInstance } from "./auth.js";
 import { registerLot2Routes, type BusinessEnv } from "./lot2.js";
 import { registerLot3Routes } from "./lot3.js";
 import { registerLot4Routes } from "./lot4.js";
+import {
+  registerLot5FeedbackRoutes,
+  registerLot5PublicRoutes,
+} from "./lot5-feedback.js";
+import { registerLot5OperationRoutes } from "./lot5-operations.js";
 
 type Dependencies = {
   auth: typeof authInstance;
@@ -19,6 +24,8 @@ type Dependencies = {
 
 export function createApp({ auth, database }: Dependencies) {
   const app = new Hono<BusinessEnv>();
+
+  registerLot5PublicRoutes(app, database);
 
   app.get("/api/health", (c) =>
     c.json(healthSchema.parse({ status: "ok", service: "voix-alumni-api" })),
@@ -129,6 +136,8 @@ export function createApp({ auth, database }: Dependencies) {
   registerLot2Routes(app, database);
   registerLot3Routes(app, database);
   registerLot4Routes(app, database);
+  registerLot5FeedbackRoutes(app, database);
+  registerLot5OperationRoutes(app, database);
 
   return app;
 }

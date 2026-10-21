@@ -946,6 +946,48 @@ export function CreativeWorkspace({
                                 </label>
                               ))}
                           </div>
+                          {draft.kind === "hot_thanks" &&
+                            organizer.role === "PRODUCTION" &&
+                            selected.status !== "publie" && (
+                              <button
+                                className="lot2-button"
+                                type="button"
+                                onClick={() => {
+                                  if (!episodeId) return;
+                                  void api<{
+                                    form: { public_url: string | null } | null;
+                                  }>(`/episodes/${episodeId}/feedback`)
+                                    .then((result) => {
+                                      if (!result.form?.public_url)
+                                        throw new Error(
+                                          "Le questionnaire doit être ouvert avant de reprendre son lien.",
+                                        );
+                                      setDraft((current) =>
+                                        current
+                                          ? {
+                                              ...current,
+                                              fields: {
+                                                ...current.fields,
+                                                feedback_url: new URL(
+                                                  result.form!.public_url!,
+                                                  window.location.origin,
+                                                ).toString(),
+                                              },
+                                            }
+                                          : current,
+                                      );
+                                      setMessage(
+                                        "Lien repris dans le brouillon. Enregistrez la version puis faites-la valider avant copie.",
+                                      );
+                                    })
+                                    .catch((cause: Error) =>
+                                      setError(cause.message),
+                                    );
+                                }}
+                              >
+                                Utiliser le lien du feedback ouvert
+                              </button>
+                            )}
                           {draft.kind === "final_thanks" && (
                             <label>
                               <input

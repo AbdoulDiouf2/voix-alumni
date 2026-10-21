@@ -17,6 +17,7 @@ import { createApp } from "./app.js";
 import { auth, configuredGoogleProvider, database } from "./auth.js";
 import { resolveLocalDateTime } from "./lot2.js";
 import sharp from "sharp";
+import { createObjectStore } from "./storage.js";
 
 const app = createApp({ auth, database });
 const origin = process.env.BETTER_AUTH_URL ?? "http://127.0.0.1:5173";
@@ -785,6 +786,22 @@ describe("Lot 4 creative workflow", () => {
         )
       ).status,
     ).toBe(409);
+    const verifiedQuote = await (
+      await send(`${base}/quotes`, production, "POST", {
+        exact_text: "Une citation fictive pour la recette",
+        source_ref: "Source fictive de recette documentée",
+      })
+    ).json();
+    expect(
+      (
+        await send(
+          `${base}/quotes/${verifiedQuote.id}/approve`,
+          responsible,
+          "POST",
+          { expected_version: 1, confirmed_exact: true },
+        )
+      ).status,
+    ).toBe(200);
     const thanksConfirmed = await (
       await send(`/api/v1/contents/${thanks.id}`, production, "PATCH", {
         expected_version: thanksReview.version,
@@ -975,8 +992,615 @@ describe("Lot 4 creative workflow", () => {
   });
 });
 
+describe("Lot 5 feedback and session operations", () => {
+  it("keeps roles, public tokens, versions, reminders and imports coherent", async () => {
+    const responsable = await login(fixtures[0].email),
+      production = await login(fixtures[1].email);
+    const send = (
+      path: string,
+      cookie: string | null,
+      method = "GET",
+      payload?: unknown,
+      extra?: Record<string, string>,
+    ) =>
+      request(path, {
+        method,
+        headers: {
+          ...(cookie ? { cookie } : {}),
+          "content-type": "application/json",
+          ...extra,
+        },
+        body: payload === undefined ? undefined : JSON.stringify(payload),
+      });
+    const person = await (
+      await send("/api/v1/alumni", responsable, "POST", {
+        full_name: "Lot Cinq Fictif",
+        job_title: "Fonction fictive",
+        company: "Organisation fictive",
+      })
+    ).json();
+    const episode = await (
+      await send("/api/v1/episodes", responsable, "POST", {
+        alumni_id: person.id,
+      })
+    ).json();
+    const base = `/api/v1/episodes/${episode.id}`;
+    expect((await send(`${base}/operations`, production)).status).toBe(404);
+    const confirmed = await (
+      await send(`${base}/confirm`, responsable, "POST", {
+        expected_version: episode.version,
+        start_at_local: "2026-10-25T18:00",
+        event_timezone: "Europe/Paris",
+      })
+    ).json();
+    expect(
+      (
+        await send(`${base}/handoff`, responsable, "POST", {
+          expected_version: confirmed.version,
+        })
+      ).status,
+    ).toBe(200);
+    const first = await (await send(`${base}/operations`, production)).json();
+    expect(first.reminders).toHaveLength(5);
+    expect(
+      (
+        await send(`${base}/session-plan`, responsable, "PUT", {
+          teams_url: "https://teams.microsoft.com/l/meetup-join/test",
+          expected_version: null,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await send(`${base}/session-plan`, production, "PUT", {
+          teams_url: "https://teams.microsoft.com/l/meetup-join/test",
+          fallback_url: null,
+          expected_version: null,
+        })
+      ).status,
+    ).toBe(200);
+    const plan = await (await send(`${base}/operations`, production)).json();
+    expect(plan.plan.teams_url).toContain("teams.microsoft.com");
+    const concurrent = await Promise.all([
+      send(`${base}/session-plan`, production, "PUT", {
+        teams_url: "https://teams.microsoft.com/l/meetup-join/first",
+        fallback_url: null,
+        expected_version: plan.plan.version,
+      }),
+      send(`${base}/session-plan`, production, "PUT", {
+        teams_url: "https://teams.microsoft.com/l/meetup-join/second",
+        fallback_url: null,
+        expected_version: plan.plan.version,
+      }),
+    ]);
+    expect(concurrent.map((response) => response.status).sort()).toEqual([
+      200, 409,
+    ]);
+    const currentPlan = await (
+      await send(`${base}/operations`, production)
+    ).json();
+    expect(
+      (
+        await send(`${base}/session-plan/check-access`, production, "POST", {
+          expected_version: currentPlan.plan.version,
+          status: "accessible",
+          confirmed_manual_check: true,
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (await send(`${base}/questions/initialize`, production, "POST", {}))
+        .status,
+    ).toBe(201);
+    const conductor = await (
+      await send(`${base}/operations`, responsable)
+    ).json();
+    expect(conductor.questions).toHaveLength(6);
+    expect(
+      (
+        await send(`${base}/conductor/approve`, production, "POST", {
+          expected_version: conductor.plan.version,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await send(`${base}/conductor/approve`, responsable, "POST", {
+          expected_version: conductor.plan.version,
+        })
+      ).status,
+    ).toBe(200);
+    const beforeReport = await (
+      await send(`${base}/operations`, production)
+    ).json();
+    const j1 = beforeReport.reminders.find(
+      (item: { key: string }) => item.key === "j_1",
+    );
+    expect(
+      (
+        await send(`${base}/reminders/j_1/complete`, production, "POST", {
+          expected_version: j1.version,
+        })
+      ).status,
+    ).toBe(200);
+    const beforeChange = await (await send(base, responsable)).json();
+    expect(
+      (
+        await send(`${base}/reschedule`, responsable, "POST", {
+          expected_version: beforeChange.version,
+          start_at_local: "2026-11-12T18:00",
+          event_timezone: "Europe/Paris",
+          reason: "Changement de date fictif",
+        })
+      ).status,
+    ).toBe(200);
+    const afterReport = await (
+      await send(`${base}/operations`, production)
+    ).json();
+    expect(afterReport.plan.access_status).toBe("a_verifier");
+    expect(
+      afterReport.reminders.find((item: { key: string }) => item.key === "j_1")
+        .due_at,
+    ).toBe(j1.due_at);
+    expect(
+      afterReport.reminders.find((item: { key: string }) => item.key === "j_7")
+        .due_at,
+    ).toBeNull();
+    const proposed = await (await send(base, responsable)).json();
+    expect(
+      (
+        await send(`${base}/confirm`, responsable, "POST", {
+          expected_version: proposed.version,
+          start_at_local: "2026-11-12T18:00",
+          event_timezone: "Europe/Paris",
+        })
+      ).status,
+    ).toBe(200);
+    const reconfirmed = await (
+      await send(`${base}/operations`, production)
+    ).json();
+    expect(
+      reconfirmed.reminders.find((item: { key: string }) => item.key === "j_7")
+        .due_at,
+    ).not.toBe(
+      beforeReport.reminders.find((item: { key: string }) => item.key === "j_7")
+        .due_at,
+    );
+    expect(
+      reconfirmed.reminders.find((item: { key: string }) => item.key === "j_1")
+        .due_at,
+    ).toBe(j1.due_at);
+    const notice =
+      "Notice strictement fictive de recette : réponses anonymes, utilisées uniquement pour les tests isolés et supprimées après la recette.";
+    expect(
+      (
+        await send("/api/v1/feedback/policy", production, "POST", {
+          notice_text: notice,
+          retention_days: 30,
+          confirmed: true,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await send("/api/v1/feedback/policy", responsable, "POST", {
+          notice_text: notice,
+          retention_days: 30,
+          confirmed: true,
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (await send(`${base}/feedback`, production, "POST", {})).status,
+    ).toBe(201);
+    const draft = await (await send(`${base}/feedback`, production)).json();
+    expect(draft.versions[0].standard_unchanged).toBe(true);
+    expect(
+      (
+        await send(`${base}/feedback/open`, production, "POST", {
+          expected_version: draft.form.version,
+          confirmed: true,
+        })
+      ).status,
+    ).toBe(200);
+    const opened = await (await send(`${base}/feedback`, production)).json();
+    const token = opened.form.public_url.split("/").at(-1);
+    expect((await request(`/api/public/feedback/${token}`)).status).toBe(200);
+    expect(
+      (
+        await request(`/api/public/feedback/${token}/responses`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "idempotency-key": randomUUID(),
+          },
+          body: JSON.stringify({
+            notice_version: opened.versions[0].notice_version,
+            answers: {
+              rating: 5,
+              attendance: "En direct",
+              best: "Échange fictif",
+            },
+          }),
+        })
+      ).status,
+    ).toBe(201);
+    const repeatedKey = randomUUID();
+    const submit = () =>
+      request(`/api/public/feedback/${token}/responses`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": repeatedKey,
+        },
+        body: JSON.stringify({
+          notice_version: opened.versions[0].notice_version,
+          answers: { rating: 4 },
+        }),
+      });
+    expect((await submit()).status).toBe(201);
+    expect((await submit()).status).toBe(200);
+    expect((await send(`${base}/feedback/responses`, null)).status).toBe(401);
+    expect((await send(`${base}/feedback`, responsable)).status).toBe(200);
+    const results = await (await send(`${base}/feedback`, production)).json();
+    expect(results.summary.count).toBe(2);
+    const csv = "rating,relevance,attendance\n3,Oui,En replay\n";
+    const mapping = {
+      rating: "rating",
+      relevance: "relevance",
+      attendance: "attendance",
+    };
+    const preview = await (
+      await send(`${base}/feedback/import/preview`, production, "POST", {
+        csv,
+        mapping,
+      })
+    ).json();
+    expect(preview.valid).toBe(1);
+    expect(
+      (
+        await send(`${base}/feedback/import/commit`, production, "POST", {
+          csv,
+          mapping,
+          confirmed: true,
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await (
+          await send(`${base}/feedback/import/commit`, production, "POST", {
+            csv,
+            mapping,
+            confirmed: true,
+          })
+        ).json()
+      ).inserted,
+    ).toBe(0);
+    expect(
+      (await send(`${base}/feedback/export.csv`, production)).headers.get(
+        "content-type",
+      ),
+    ).toContain("text/csv");
+    expect(
+      (
+        await send(`${base}/mark-held`, production, "POST", {
+          expected_version: 3,
+          confirmed_held: true,
+        })
+      ).status,
+    ).toBe(403);
+    const currentEpisode = await (await send(base, responsable)).json();
+    expect(
+      (
+        await send(`${base}/mark-held`, responsable, "POST", {
+          expected_version: currentEpisode.version,
+          confirmed_held: true,
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await send(`${base}/feedback/closed`, production, "POST", {
+          expected_version: opened.form.version,
+        })
+      ).status,
+    ).toBe(200);
+    expect((await request(`/api/public/feedback/${token}`)).status).toBe(410);
+    const beforeEdit = await (
+      await send(`${base}/feedback`, production)
+    ).json();
+    const changedQuestions = beforeEdit.versions[0].questions.map(
+      (item: { id: string; label: string }) =>
+        item.id === "best"
+          ? { ...item, label: "Quel moment fictif retenez-vous ?" }
+          : item,
+    );
+    expect(
+      (
+        await send(`${base}/feedback`, production, "PATCH", {
+          expected_version: beforeEdit.form.version,
+          questions: changedQuestions,
+          notice_text: notice,
+        })
+      ).status,
+    ).toBe(200);
+    const edited = await (await send(`${base}/feedback`, production)).json();
+    expect(edited.summary.count).toBe(3);
+    expect(edited.versions).toHaveLength(2);
+    expect(edited.versions[0].approved_at).toBeNull();
+    expect(
+      (
+        await send(`${base}/feedback/open`, production, "POST", {
+          expected_version: edited.form.version,
+          confirmed: true,
+        })
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await send(`${base}/feedback/approve`, responsable, "POST", {
+          expected_version: edited.form.version,
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await send(`${base}/feedback/open`, production, "POST", {
+          expected_version: edited.form.version,
+          confirmed: true,
+        })
+      ).status,
+    ).toBe(200);
+    const workflow = await (await send(`${base}/workflow`, production)).json();
+    expect(
+      workflow.tasks.find(
+        (task: { definition_key: string }) =>
+          task.definition_key === "presence",
+      ).status,
+    ).toBe("terminee");
+    expect(workflow.stages[5].completed).toBe(false);
+    expect(
+      (
+        await send(`${base}/closure/prepare`, production, "POST", {
+          expected_version: null,
+          exceptions: {},
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await send(`${base}/closure/approve`, responsable, "POST", {
+          expected_version: 1,
+          confirmed_archive: true,
+        })
+      ).status,
+    ).toBe(409);
+    const thanks = await (
+      await send(`${base}/contents`, production, "POST", { kind: "hot_thanks" })
+    ).json();
+    const thanksEdited = await (
+      await send(`/api/v1/contents/${thanks.id}`, production, "PATCH", {
+        expected_version: thanks.version,
+        fields: {
+          feedback_url: `http://127.0.0.1:5173/feedback/public/${token}`,
+        },
+      })
+    ).json();
+    const thanksReview = await (
+      await send(`/api/v1/contents/${thanks.id}/submit`, production, "POST", {
+        expected_version: thanksEdited.version,
+      })
+    ).json();
+    const thanksApproved = await (
+      await send(`/api/v1/contents/${thanks.id}/approve`, responsable, "POST", {
+        expected_version: thanksReview.version,
+      })
+    ).json();
+    const readyForm = new FormData();
+    readyForm.append("expected_version", String(thanksApproved.version));
+    const thanksReady = await (
+      await request(`/api/v1/contents/${thanks.id}/export`, {
+        method: "POST",
+        headers: { cookie: production },
+        body: readyForm,
+      })
+    ).json();
+    expect(
+      (
+        await send(
+          `/api/v1/contents/${thanks.id}/publish`,
+          production,
+          "POST",
+          {
+            expected_version: thanksReady.version,
+            channel: "whatsapp_community",
+            confirmed_external_publication: true,
+          },
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await send(`${base}/replay`, production, "PUT", {
+          youtube_url: "https://youtu.be/abcdefghijk",
+          visibility: "unlisted",
+          status: "available",
+          recording_rights: "unknown",
+          diffusion_rights: "unknown",
+          expected_version: null,
+        })
+      ).status,
+    ).toBe(422);
+    expect(
+      (
+        await send(`${base}/replay`, production, "PUT", {
+          youtube_url: "https://youtu.be/abcdefghijk",
+          visibility: "unlisted",
+          status: "available",
+          recording_rights: "granted",
+          diffusion_rights: "granted",
+          rights_evidence_ref: "Autorisation fictive documentée",
+          expected_version: null,
+        })
+      ).status,
+    ).toBe(200);
+    const transcriptForm = new FormData();
+    transcriptForm.append(
+      "file",
+      new File(
+        [
+          "WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nUne phrase fictive de recette.",
+        ],
+        "recette.vtt",
+        { type: "text/vtt" },
+      ),
+    );
+    transcriptForm.append("language", "fr");
+    transcriptForm.append(
+      "provenance",
+      "Transcription fictive générée pour la recette",
+    );
+    const uploaded = await request(`${base}/transcripts`, {
+      method: "POST",
+      headers: { cookie: production },
+      body: transcriptForm,
+    });
+    expect(uploaded.status).toBe(201);
+    const transcript = await uploaded.json();
+    expect(
+      (await send(`${base}/transcripts/${transcript.id}`, production)).status,
+    ).toBe(200);
+    expect(
+      (
+        await send(
+          `${base}/transcripts/${transcript.id}/review`,
+          production,
+          "POST",
+          {
+            corrected_text: "Une phrase fictive de recette.",
+            confirmed_review: true,
+          },
+        )
+      ).status,
+    ).toBe(200);
+    const quote = await (
+      await send(`${base}/quotes`, production, "POST", {
+        transcript_id: transcript.id,
+        exact_text: "Une phrase fictive de recette.",
+        source_ref: "recette.vtt, 00:00:01",
+      })
+    ).json();
+    expect(
+      (
+        await send(`${base}/quotes/${quote.id}/approve`, production, "POST", {
+          expected_version: 1,
+          confirmed_exact: true,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await send(`${base}/quotes/${quote.id}/approve`, responsable, "POST", {
+          expected_version: 1,
+          confirmed_exact: true,
+        })
+      ).status,
+    ).toBe(200);
+    const preparedClosure = await (
+      await send(`${base}/closure/prepare`, production, "POST", {
+        expected_version: 1,
+        exceptions: {
+          final_poster:
+            "Affiche finale indisponible pour cette recette synthétique.",
+          replay_message: "Diffusion du message replay reportée et documentée.",
+        },
+      })
+    ).json();
+    expect(preparedClosure.status).toBe("prepared");
+    expect(
+      (
+        await send(`${base}/closure/approve`, production, "POST", {
+          expected_version: preparedClosure.version,
+          confirmed_archive: true,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await send(`${base}/closure/approve`, responsable, "POST", {
+          expected_version: preparedClosure.version,
+          confirmed_archive: true,
+        })
+      ).status,
+    ).toBe(200);
+    const archived = await (
+      await send(`${base}/operations`, production)
+    ).json();
+    expect(archived.episode.status).toBe("cloture");
+    expect(archived.transcripts[0].reviewed_at).toBeTruthy();
+    expect(archived.quotes[0].status).toBe("approved");
+    expect(archived.closure.exceptions_json).toContain("final_poster");
+    const activeResponses = await (
+      await send(`${base}/feedback/responses`, production)
+    ).json();
+    await database.pool.query(
+      "UPDATE feedback_responses SET submitted_at=now()-interval '31 days' WHERE id=$1",
+      [activeResponses.items[0].id],
+    );
+    expect(
+      (
+        await send("/api/v1/feedback/retention/purge", production, "POST", {
+          confirmed: true,
+        })
+      ).status,
+    ).toBe(403);
+    const eligible = await (
+      await send("/api/v1/feedback/retention/purge", responsable, "POST", {})
+    ).json();
+    expect(eligible.eligible).toBeGreaterThanOrEqual(1);
+    const purged = await (
+      await send("/api/v1/feedback/retention/purge", responsable, "POST", {
+        confirmed: true,
+      })
+    ).json();
+    expect(purged.purged).toBeGreaterThanOrEqual(1);
+    expect(
+      (await (await send(`${base}/feedback/responses`, production)).json())
+        .items,
+    ).toHaveLength(2);
+  });
+});
+
 afterAll(async () => {
   for (const fixture of fixtures) {
+    const episodeIds = "SELECT id FROM episodes WHERE created_by=$1";
+    await database.pool.query(
+      `DELETE FROM feedback_responses WHERE form_id IN (SELECT id FROM feedback_forms WHERE episode_id IN (${episodeIds}))`,
+      [fixture.id],
+    );
+    await database.pool.query(
+      `DELETE FROM feedback_imports WHERE form_id IN (SELECT id FROM feedback_forms WHERE episode_id IN (${episodeIds}))`,
+      [fixture.id],
+    );
+    await database.pool.query(
+      `DELETE FROM feedback_form_versions WHERE form_id IN (SELECT id FROM feedback_forms WHERE episode_id IN (${episodeIds}))`,
+      [fixture.id],
+    );
+    for (const table of [
+      "feedback_forms",
+      "episode_closures",
+      "episode_quotes",
+      "episode_transcripts",
+      "episode_replays",
+      "session_questions",
+      "session_reminders",
+      "session_plans",
+    ])
+      await database.pool.query(
+        `DELETE FROM ${table} WHERE episode_id IN (${episodeIds})`,
+        [fixture.id],
+      );
     await database.pool.query(
       "DELETE FROM content_publications WHERE content_id IN (SELECT id FROM episode_contents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1))",
       [fixture.id],
@@ -993,6 +1617,13 @@ afterAll(async () => {
       "DELETE FROM media_consents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1)",
       [fixture.id],
     );
+    const fixtureAssets = await database.pool.query<{ storage_key: string }>(
+      "SELECT storage_key FROM media_assets WHERE episode_id IN (SELECT id FROM episodes WHERE created_by=$1)",
+      [fixture.id],
+    );
+    const store = createObjectStore();
+    for (const item of fixtureAssets.rows)
+      await store?.removeObject(item.storage_key);
     await database.pool.query(
       "DELETE FROM media_assets WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1)",
       [fixture.id],
@@ -1013,6 +1644,10 @@ afterAll(async () => {
     await database.db
       .delete(organizerMemberships)
       .where(eq(organizerMemberships.userId, fixture.id));
+    await database.pool.query(
+      "DELETE FROM feedback_policies WHERE approved_by=$1",
+      [fixture.id],
+    );
     await database.db.delete(user).where(eq(user.id, fixture.id));
   }
   await database.pool.end();

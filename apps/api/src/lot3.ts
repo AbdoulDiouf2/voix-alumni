@@ -20,7 +20,13 @@ import {
   episodes,
   episodeStages,
   episodeTasks,
+  episodeClosures,
+  episodeReplays,
+  episodeTranscripts,
+  feedbackForms,
   informationRequests,
+  sessionPlans,
+  sessionReminders,
   workflowEvents,
   workflowNotifications,
   user,
@@ -550,6 +556,146 @@ export function registerLot3Routes(app: Hono<BusinessEnv>, database: Database) {
                 source_event_id: source.id,
                 source_action: source.action,
                 source_kind: "content",
+              }),
+            ),
+          );
+      });
+    }
+    // Lot 5: complete only untouched templates backed by current, persisted
+    // evidence. Human checks (rights, presence, external sharing) remain explicit.
+    const [sessionPlan] = await db
+      .select()
+      .from(sessionPlans)
+      .where(eq(sessionPlans.episodeId, episode.id));
+    const [feedbackForm] = await db
+      .select()
+      .from(feedbackForms)
+      .where(eq(feedbackForms.episodeId, episode.id));
+    const [replay] = await db
+      .select()
+      .from(episodeReplays)
+      .where(eq(episodeReplays.episodeId, episode.id));
+    const [closure] = await db
+      .select()
+      .from(episodeClosures)
+      .where(eq(episodeClosures.episodeId, episode.id));
+    const transcriptRows = await db
+      .select()
+      .from(episodeTranscripts)
+      .where(eq(episodeTranscripts.episodeId, episode.id))
+      .orderBy(desc(episodeTranscripts.version))
+      .limit(1);
+    const [dayReminder] = await db
+      .select()
+      .from(sessionReminders)
+      .where(
+        and(
+          eq(sessionReminders.episodeId, episode.id),
+          eq(sessionReminders.key, "j_1"),
+        ),
+      );
+    const lot5Events = await db
+      .select()
+      .from(workflowEvents)
+      .where(eq(workflowEvents.episodeId, episode.id))
+      .orderBy(desc(workflowEvents.occurredAt));
+    const sourceFor = (action: string) =>
+      lot5Events.find((row) => row.action === action);
+    const lot5Evidence = new Map<string, (typeof lot5Events)[number]>();
+    const evidenced = (key: string, condition: boolean, action: string) => {
+      const source = sourceFor(action);
+      if (condition && source) lot5Evidence.set(key, source);
+    };
+    evidenced(
+      "reunion",
+      Boolean(sessionPlan?.teamsUrl),
+      "session.link_updated",
+    );
+    evidenced("feedback", Boolean(feedbackForm), "feedback.created");
+    evidenced(
+      "acces",
+      sessionPlan?.accessStatus === "accessible",
+      "session.access_checked",
+    );
+    evidenced(
+      "conducteur",
+      Boolean(
+        sessionPlan?.conductorApprovedVersion &&
+        sessionPlan.conductorApprovedVersion === sessionPlan.conductorVersion,
+      ),
+      "conductor.approved",
+    );
+    evidenced(
+      "rappel",
+      dayReminder?.status === "termine",
+      "reminder.completed",
+    );
+    evidenced(
+      "presence",
+      ["realise", "postproduction", "cloture"].includes(episode.status),
+      "session.held_confirmed",
+    );
+    evidenced(
+      "replay",
+      replay?.status === "available" &&
+        replay.recordingRights === "granted" &&
+        replay.diffusionRights === "granted",
+      "replay.updated",
+    );
+    evidenced(
+      "transcription",
+      Boolean(transcriptRows[0]?.reviewedAt),
+      "transcript.reviewed",
+    );
+    evidenced("archive", closure?.status === "approved", "closure.approved");
+    for (const [key, source] of lot5Evidence) {
+      const template = templates.find((item) => item[1] === key);
+      if (!template) continue;
+      await db.transaction(async (tx) => {
+        await tx
+          .select()
+          .from(episodeStages)
+          .where(
+            and(
+              eq(episodeStages.episodeId, episode.id),
+              eq(episodeStages.number, template[0]),
+            ),
+          )
+          .for("update");
+        const [task] = await tx
+          .update(episodeTasks)
+          .set({
+            status: "terminee",
+            completedBy: source.actorUserId,
+            completedAt: source.occurredAt,
+            updatedBy: source.actorUserId,
+            updatedAt: new Date(),
+            version: 2,
+          })
+          .where(
+            and(
+              eq(episodeTasks.episodeId, episode.id),
+              eq(episodeTasks.definitionKey, key),
+              eq(episodeTasks.templateVersion, 1),
+              eq(episodeTasks.title, template[2]),
+              eq(episodeTasks.ownerRole, template[4]),
+              eq(episodeTasks.version, 1),
+              eq(episodeTasks.status, "a_faire"),
+            ),
+          )
+          .returning();
+        if (task)
+          await tx.insert(workflowEvents).values(
+            event(
+              episode.id,
+              "task",
+              task.id,
+              "task.synchronized",
+              source.actorUserId,
+              JSON.stringify({
+                source_event_id: source.id,
+                source_action: source.action,
+                source_kind: "lot5",
               }),
             ),
           );

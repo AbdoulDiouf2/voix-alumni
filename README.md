@@ -67,7 +67,7 @@
 
 ## Installation locale et état du Lot 2
 
-Le socle TypeScript et les fonctions des Lots 1–4 fonctionnent localement : authentification fermée, vivier, épisodes, parcours, studio d'affiches et communications. Utiliser Node 24 (`.nvmrc`), `npm ci`, créer `.env` depuis `.env.example`, démarrer le PostgreSQL isolé, puis appliquer les migrations Drizzle avec `npm run db:migrate -w @voix-alumni/db`. Lancer `npm run dev:api` et `npm run dev:web`. Le provisionnement des deux comptes passe par une commande privée ; voir [`Docs/11_GUIDE_DEVELOPPEMENT.md`](Docs/11_GUIDE_DEVELOPPEMENT.md). Google OAuth réel et Cloudflare R2 réel ne sont pas vérifiés sans identifiants/buckets autorisés. Aucun envoi externe ni déploiement n'est réalisé par le Lot 4.
+Le socle TypeScript et les fonctions des Lots 1–4 fonctionnent localement : authentification fermée, vivier, épisodes, parcours, studio d'affiches et communications. Le Lot 5 ajoute en branche locale les réunions, le conducteur, le feedback natif et la post-production ; sa validation humaine reste attendue. Utiliser Node 24 (`.nvmrc`), `npm ci`, créer `.env` depuis `.env.example`, démarrer le PostgreSQL isolé, puis appliquer les migrations Drizzle avec `npm run db:migrate -w @voix-alumni/db` dans l'environnement autorisé. Lancer `npm run dev:api` et `npm run dev:web`. Le provisionnement des deux comptes passe par une commande privée ; voir [`Docs/11_GUIDE_DEVELOPPEMENT.md`](Docs/11_GUIDE_DEVELOPPEMENT.md). Le bucket R2 de développement a fait l'objet d'une recette Lot 4 ; les données personnelles réelles, la production et les sauvegardes restent non vérifiées pour le Lot 5. Aucun envoi externe ni déploiement n'est réalisé par le Lot 5.
 
 ## Conventions de décision et de maintenance documentaire
 

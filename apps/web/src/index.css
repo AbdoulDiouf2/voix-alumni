@@ -1717,3 +1717,222 @@ a {
     width: min(100%, 320px);
   }
 }
+.lot5-page {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding-bottom: 80px;
+}
+.lot5-page .page-header {
+  margin-bottom: 24px;
+}
+.lot5-page .page-header a {
+  color: var(--gold);
+}
+.lot5-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+.lot5-panel {
+  padding: 24px;
+  min-width: 0;
+}
+.lot5-panel h2 {
+  margin: 0 0 12px;
+  font-family: Georgia, serif;
+  color: var(--deep);
+  font-size: 23px;
+}
+.lot5-panel p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+.lot5-panel label,
+.lot5-public-card label {
+  display: block;
+  margin: 12px 0;
+  font-weight: 600;
+  color: var(--deep);
+}
+.lot5-panel input:not([type="checkbox"]):not([type="file"]),
+.lot5-panel select,
+.lot5-panel textarea,
+.lot5-public-card textarea {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--deep);
+  background: var(--white);
+  font: inherit;
+}
+.lot5-panel textarea,
+.lot5-public-card textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+.lot5-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin: 16px 0;
+}
+.lot5-inline {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.lot5-panel ul,
+.lot5-panel ol {
+  padding-left: 21px;
+  line-height: 1.7;
+}
+.lot5-panel li {
+  padding: 5px 0;
+}
+.lot5-questions small {
+  display: block;
+  color: var(--muted);
+}
+.lot5-panel details {
+  border-top: 1px solid var(--line);
+  padding: 12px 0;
+}
+.lot5-panel summary {
+  cursor: pointer;
+  font-weight: 650;
+  color: var(--deep);
+}
+.lot5-error,
+.lot5-success {
+  padding: 12px 16px;
+  border-radius: 8px;
+}
+.lot5-error {
+  background: #fff1ee;
+  color: #882e25;
+}
+.lot5-success {
+  background: #edf7ef;
+  color: #225a37;
+}
+.lot5-text-button {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--gold);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.lot5-bars > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0;
+}
+.lot5-bars span {
+  display: inline-block;
+  min-width: 4px;
+  height: 12px;
+  background: var(--gold);
+  border-radius: 6px;
+}
+.lot5-response {
+  border-top: 1px solid var(--line);
+}
+.lot5-panel table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.lot5-panel th,
+.lot5-panel td {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.lot5-public {
+  min-height: 100vh;
+  background: var(--ivory);
+  padding: 0 18px 60px;
+}
+.lot5-public-head {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 0 22px;
+  text-align: center;
+}
+.lot5-public-head span {
+  color: var(--gold);
+  letter-spacing: 0.2em;
+  font-size: 12px;
+  font-weight: 700;
+}
+.lot5-public-head h1 {
+  font-family: Georgia, serif;
+  font-size: clamp(30px, 5vw, 46px);
+  color: var(--deep);
+  margin: 14px 0 8px;
+}
+.lot5-public-head p {
+  color: var(--muted);
+}
+.lot5-public-card {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: clamp(22px, 5vw, 42px);
+}
+.lot5-public-card fieldset {
+  border: 0;
+  border-top: 1px solid var(--line);
+  padding: 22px 0;
+  margin: 0;
+}
+.lot5-public-card legend {
+  font-weight: 650;
+  color: var(--deep);
+  padding-top: 14px;
+}
+.lot5-public-card legend span {
+  color: #a94437;
+}
+.lot5-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px 20px;
+}
+.lot5-options label {
+  margin: 2px 0;
+  font-weight: 400;
+}
+.lot5-notice {
+  padding: 16px;
+  background: var(--pale);
+  border-left: 2px solid var(--gold);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.lot5-honeypot {
+  position: absolute;
+  left: -9999px;
+}
+@media (max-width: 780px) {
+  .lot5-grid {
+    grid-template-columns: 1fr;
+  }
+  .lot5-panel {
+    padding: 18px;
+  }
+  .lot5-page {
+    padding-bottom: 120px;
+  }
+  .lot5-panel table {
+    font-size: 12px;
+  }
+  .lot5-panel th,
+  .lot5-panel td {
+    padding: 8px 4px;
+  }
+}
