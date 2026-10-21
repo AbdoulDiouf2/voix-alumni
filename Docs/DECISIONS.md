@@ -31,8 +31,8 @@ Ce registre conserve les décisions approuvées et leurs remplacements. Une nouv
 - **Alternatives documentées :** disque local du VPS comme stockage principal ; Cloudflare R2 S3 compatible derrière une abstraction de stockage.
 - **Décision :** deux buckets privés distincts développement/production avec restriction de juridiction UE, droits minimaux, URLs temporaires signées et métadonnées PostgreSQL ; originaux volumineux hors VPS ; copie indépendante des médias critiques.
 - **Justification :** confidentialité, maîtrise de l'espace disque et possibilité de migration du fournisseur.
-- **Conséquences :** interface de stockage préparée au Lot 0 et modèle `media_assets` ajouté au Lot 2 ; aucun bucket, identifiant ni adaptateur R2 créé. Sauvegarde/restauration média encore à construire et tester.
-- **Statut :** VALIDÉE, mise en œuvre REPORTÉE au lot média.
+- **Conséquences :** interface de stockage préparée au Lot 0, modèle `media_assets` ajouté au Lot 2 et adaptateur S3/R2 de juridiction UE implémenté localement au Lot 4. Aucun bucket ni identifiant créé ; transfert R2 réel, sauvegarde et restauration non testés.
+- **Statut :** VALIDÉE, adaptateur local testé via stockage isolé ; R2 réel NON VÉRIFIÉ.
 - **Source :** instructions du propriétaire ; `Docs/07_ARCHITECTURE_TECHNIQUE.md`, `Docs/16_DEPLOIEMENT_ET_ENVIRONNEMENTS.md`.
 
 ## DEC-004 — Responsabilités et preuve de publication
@@ -42,8 +42,8 @@ Ce registre conserve les décisions approuvées et leurs remplacements. Une nouv
 - **Alternatives documentées :** considérer génération ou copie d'un message comme publication ; confirmation manuelle distincte.
 - **Décision :** la publication n'est enregistrée qu'après confirmation manuelle avec historique de l'épisode ; Teams, WhatsApp et YouTube restent manuels ou semi-manuels en V1.
 - **Justification :** l'application ne peut pas déduire la diffusion réelle d'un aperçu, d'une génération ou d'une copie.
-- **Conséquences :** règle documentée et future permission serveur ; aucun flux de publication métier n'existe au Lot 1.
-- **Statut :** VALIDÉE, fonctionnalité NON IMPLÉMENTÉE.
+- **Conséquences :** règle documentée dès le Lot 1 ; le Lot 4 ajoute la confirmation manuelle avec canal, auteur, date, version et preuve facultative, séparée de l'export et de la copie.
+- **Statut :** VALIDÉE, implémentation locale du constat testée au Lot 4 ; diffusion externe non automatisée.
 - **Source :** instructions du propriétaire ; `Docs/02_WORKFLOWS_ET_REGLES_METIER.md`, `Docs/04_ROLES_ET_PERMISSIONS.md`.
 
 ## DEC-005 — Feedback natif et consentements
@@ -53,8 +53,8 @@ Ce registre conserve les décisions approuvées et leurs remplacements. Une nouv
 - **Alternatives documentées :** formulaire natif V1 et import historique ; aucune autre solution retenue n'est détaillée dans les preuves disponibles.
 - **Décision :** réponses anonymes par défaut sauf identification demandée explicitement, conservation configurable, suppression individuelle, statistiques seulement si réellement anonymisées ; modéliser les consentements portraits, enregistrements et replays.
 - **Justification :** minimiser les données et distinguer les différentes autorisations d'usage.
-- **Conséquences :** règles documentées ; formulaire, import et données de consentement non implémentés au Lot 1.
-- **Statut :** VALIDÉE, mise en œuvre REPORTÉE.
+- **Conséquences :** règles documentées ; consentement de portrait par finalité implémenté au Lot 4. Formulaire de feedback, import et consentement de replay restent à réaliser aux lots autorisés.
+- **Statut :** VALIDÉE, mise en œuvre partielle au Lot 4.
 - **Source :** instructions du propriétaire ; `Docs/08_MODELE_DE_DONNEES.md`, `Docs/13_SECURITE_ET_CONFIDENTIALITE.md`.
 
 ## DEC-006 — Déploiement futur isolé sur l'infrastructure partagée
@@ -108,8 +108,8 @@ Ce registre conserve les décisions approuvées et leurs remplacements. Une nouv
 - **Alternatives :** bloquer tout relais incomplet ; autoriser le relais puis contrôler les droits au moment d'une publication utilisant le portrait.
 - **Décision :** le relais reste possible avec une mention explicite des éléments manquants ; toute future publication utilisant un portrait devra être bloquée côté serveur tant que le droit d'utilisation applicable n'est pas vérifié et enregistré.
 - **Justification :** permettre le travail interne sans transformer une transmission en autorisation de publier.
-- **Conséquences :** les contrats et la recette des lots de publication portent cette porte de contrôle ; aucune fonctionnalité de publication ni studio d'affiches n'est implémenté au Lot 2.
-- **Statut :** VALIDÉE ; contrôle de publication À IMPLÉMENTER au lot concerné.
+- **Conséquences :** les contrats et la recette du Lot 4 portent cette porte de contrôle ; validation, export et constat de publication d'affiches vérifient droit et consentement actif côté API.
+- **Statut :** VALIDÉE ; contrôle local testé au Lot 4, usage réel soumis aux preuves de droits.
 - **Source :** instruction explicite du propriétaire pour la clôture du Lot 2.
 
 ## DEC-011 — Base isolée pour la recette navigateur automatisée
@@ -135,3 +135,13 @@ Ce registre conserve les décisions approuvées et leurs remplacements. Une nouv
 ## Décisions remplacées
 
 Aucune décision remplacée n'est identifiée dans les preuves disponibles **depuis l'ouverture de ce registre**. L'ancien choix FastAPI/Python a été remplacé par `DEC-001` avant l'initialisation du registre ; ses références historiques restent dans le contexte de `DEC-001` et dans les documents du Lot 0. Toute future substitution recevra un nouvel identifiant et une référence croisée sans effacer l'entrée d'origine.
+
+## DEC-013 — Rendu d'affiches navigateur et contrôle éditorial du Lot 4
+
+- **Date :** 2026-10-21 ; autorisation explicite du propriétaire pour le Lot 4.
+- **Contexte :** deux affiches PNG exportables et des messages persistés, sans confondre préparation et diffusion.
+- **Décision :** aperçu et export PNG proviennent du même Canvas 1080 × 1350 dans le navigateur. Les contenus suivent brouillon, relecture, validation Responsable, export/prêt, puis constat manuel de publication. Les droits et le consentement de finalité sont revérifiés côté API. Les changements de source bloquent les actions sur l'ancienne version sans effacer son historique.
+- **Justification :** parité mesurable des pixels entre aperçu et PNG, absence de moteur Chromium côté serveur, traçabilité de la diffusion réelle.
+- **Conséquences :** templates inspirés des affiches fournies ; les logos intégrés aux affiches de référence ne sont pas extraits ni ajoutés comme fichiers autonomes. Les ressources officielles doivent être chargées et leurs droits vérifiés avant usage réel. L'adaptateur R2 est prêt mais non testé avec un bucket réel.
+- **Statut :** VALIDÉE par le périmètre du Lot 4, implémentation locale en recette ; production NON VÉRIFIÉE.
+- **Source :** instruction de démarrage du Lot 4, affiches locales fournies dans `Docs/Voix d'alumni/Affiches/` et vérifications locales consignées dans le journal.

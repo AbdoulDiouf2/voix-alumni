@@ -16,6 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
 import { auth, configuredGoogleProvider, database } from "./auth.js";
 import { resolveLocalDateTime } from "./lot2.js";
+import sharp from "sharp";
 
 const app = createApp({ auth, database });
 const origin = process.env.BETTER_AUTH_URL ?? "http://127.0.0.1:5173";
@@ -440,8 +441,396 @@ describe("Lot 3 operational workflow", () => {
   });
 });
 
+describe("Lot 4 creative workflow", () => {
+  it("keeps approvals, versions and manual publication distinct while enforcing media rights", async () => {
+    const responsible = await login(fixtures[0].email);
+    const production = await login(fixtures[1].email);
+    const send = (
+      path: string,
+      cookie: string,
+      method = "GET",
+      payload?: unknown,
+    ) =>
+      request(path, {
+        method,
+        headers: { cookie, "content-type": "application/json" },
+        body: payload === undefined ? undefined : JSON.stringify(payload),
+      });
+    const person = await (
+      await send("/api/v1/alumni", responsible, "POST", {
+        full_name: "Ézéchiel Exemple",
+        promotion_year: "2012",
+        job_title: "Directeur des technologies et des opérations régionales",
+        company: "Organisation fictive",
+      })
+    ).json();
+    const episode = await (
+      await send("/api/v1/episodes", responsible, "POST", {
+        alumni_id: person.id,
+      })
+    ).json();
+    const confirmed = await (
+      await send(
+        `/api/v1/episodes/${episode.id}/confirm`,
+        responsible,
+        "POST",
+        {
+          expected_version: episode.version,
+          start_at_local: "2026-11-10T18:00",
+          event_timezone: "Europe/Paris",
+        },
+      )
+    ).json();
+    expect(
+      (await send(`/api/v1/episodes/${episode.id}/creative`, production))
+        .status,
+    ).toBe(404);
+    expect(
+      (
+        await send(
+          `/api/v1/episodes/${episode.id}/handoff`,
+          responsible,
+          "POST",
+          { expected_version: confirmed.version },
+        )
+      ).status,
+    ).toBe(200);
+    const base = `/api/v1/episodes/${episode.id}`;
+    expect(
+      (
+        await send(`${base}/contents`, responsible, "POST", {
+          kind: "announcement_message",
+        })
+      ).status,
+    ).toBe(403);
+    const message = await (
+      await send(`${base}/contents`, production, "POST", {
+        kind: "announcement_message",
+      })
+    ).json();
+    expect(message.status).toBe("brouillon");
+    expect(
+      (
+        await send(
+          `/api/v1/contents/${message.id}/approve`,
+          production,
+          "POST",
+          { expected_version: message.version },
+        )
+      ).status,
+    ).toBe(403);
+    const review = await (
+      await send(`/api/v1/contents/${message.id}/submit`, production, "POST", {
+        expected_version: message.version,
+      })
+    ).json();
+    expect(review.status).toBe("a_relire");
+    const approved = await (
+      await send(
+        `/api/v1/contents/${message.id}/approve`,
+        responsible,
+        "POST",
+        { expected_version: review.version },
+      )
+    ).json();
+    expect(approved.status).toBe("valide");
+    expect(approved.published_at).toBeNull();
+    const readyForm = new FormData();
+    readyForm.append("expected_version", String(approved.version));
+    const ready = await request(`/api/v1/contents/${message.id}/export`, {
+      method: "POST",
+      headers: { cookie: production },
+      body: readyForm,
+    });
+    expect(ready.status).toBe(200);
+    const prepared = await ready.json();
+    expect(prepared.status).toBe("pret_a_publier");
+    expect(prepared.published_at).toBeNull();
+    const publish = await send(
+      `/api/v1/contents/${message.id}/publish`,
+      production,
+      "POST",
+      { expected_version: prepared.version, channel: "whatsapp_community" },
+    );
+    expect(publish.status).toBe(200);
+    expect((await publish.json()).status).toBe("publie");
+    expect(
+      (
+        await send(
+          `/api/v1/contents/${message.id}/publish`,
+          production,
+          "POST",
+          { expected_version: prepared.version, channel: "whatsapp_community" },
+        )
+      ).status,
+    ).toBe(409);
+    const history = await (
+      await send(`/api/v1/contents/${message.id}/history`, responsible)
+    ).json();
+    expect(history.revisions).toHaveLength(5);
+    expect(history.publications).toHaveLength(1);
+    const poster = await (
+      await send(`${base}/contents`, production, "POST", {
+        kind: "announcement_poster",
+      })
+    ).json();
+    expect(
+      (
+        await send(`/api/v1/contents/${poster.id}/submit`, production, "POST", {
+          expected_version: poster.version,
+        })
+      ).status,
+    ).toBe(422);
+    const image = await sharp({
+      create: { width: 1200, height: 1500, channels: 4, background: "#ddc8b5" },
+    })
+      .png()
+      .toBuffer();
+    const upload = async (kind: string) => {
+      const form = new FormData();
+      form.append("kind", kind);
+      form.append(
+        "file",
+        new File([image], `${kind}.png`, { type: "image/png" }),
+      );
+      const response = await request(`${base}/assets`, {
+        method: "POST",
+        headers: { cookie: production },
+        body: form,
+      });
+      expect(response.status).toBe(201);
+      return response.json();
+    };
+    const portrait = await upload("portrait");
+    const esmt = await upload("logo_esmt");
+    const cps = await upload("logo_cps");
+    const withPhoto = await (
+      await send(`/api/v1/contents/${poster.id}`, production, "PATCH", {
+        expected_version: poster.version,
+        portrait_asset_id: portrait.id,
+        fields: { logo_esmt_asset_id: esmt.id, logo_cps_asset_id: cps.id },
+      })
+    ).json();
+    const posterReview = await (
+      await send(`/api/v1/contents/${poster.id}/submit`, production, "POST", {
+        expected_version: withPhoto.version,
+      })
+    ).json();
+    expect(
+      (
+        await send(
+          `/api/v1/contents/${poster.id}/approve`,
+          responsible,
+          "POST",
+          { expected_version: posterReview.version },
+        )
+      ).status,
+    ).toBe(409);
+    const rights = async (
+      asset: { id: string },
+      status: string,
+      version: number,
+    ) =>
+      send(`/api/v1/assets/${asset.id}/rights`, responsible, "PATCH", {
+        expected_version: version,
+        status,
+        evidence_ref:
+          status === "granted" ? "Autorisation interne documentée" : null,
+      });
+    expect((await rights(portrait, "granted", 1)).status).toBe(200);
+    expect((await rights(esmt, "granted", 1)).status).toBe(200);
+    expect((await rights(cps, "granted", 1)).status).toBe(200);
+    const consent = await send(`${base}/consents`, responsible, "POST", {
+      asset_id: portrait.id,
+      purpose: "portrait_announcement",
+      status: "granted",
+      scope: "Affiche et communauté",
+      evidence_ref: "Autorisation portrait documentée",
+    });
+    expect(consent.status).toBe(201);
+    const posterApproved = await send(
+      `/api/v1/contents/${poster.id}/approve`,
+      responsible,
+      "POST",
+      { expected_version: posterReview.version },
+    );
+    expect(posterApproved.status).toBe(200);
+    const approvedPoster = await posterApproved.json();
+    const png = await sharp({
+      create: { width: 1080, height: 1350, channels: 4, background: "#fffdf9" },
+    })
+      .png()
+      .toBuffer();
+    const exportForm = new FormData();
+    exportForm.append("expected_version", String(approvedPoster.version));
+    exportForm.append(
+      "file",
+      new File([png], "annonce.png", { type: "image/png" }),
+    );
+    const exportResponse = await request(
+      `/api/v1/contents/${poster.id}/export`,
+      { method: "POST", headers: { cookie: production }, body: exportForm },
+    );
+    expect(exportResponse.status).toBe(200);
+    const exportedPoster = await exportResponse.json();
+    expect(exportedPoster.exported_asset_id).toBeTruthy();
+    const binary = await request(
+      `/api/v1/assets/${exportedPoster.exported_asset_id}/content`,
+      { headers: { cookie: production } },
+    );
+    expect(binary.status).toBe(200);
+    expect(
+      (await sharp(Buffer.from(await binary.arrayBuffer())).metadata()).width,
+    ).toBe(1080);
+    expect(
+      (
+        await request(
+          `/api/v1/assets/${exportedPoster.exported_asset_id}/content`,
+        )
+      ).status,
+    ).toBe(401);
+    const synchronized = await (
+      await send(`${base}/workflow`, production)
+    ).json();
+    for (const key of ["affiche", "texte", "validation", "publication"]) {
+      expect(
+        synchronized.tasks.find(
+          (task: { definition_key: string }) => task.definition_key === key,
+        )?.status,
+      ).toBe("terminee");
+    }
+    const syncEvents = synchronized.history.filter(
+      (event: { action: string }) => event.action === "task.synchronized",
+    ).length;
+    const repeated = await (await send(`${base}/workflow`, production)).json();
+    expect(
+      repeated.history.filter(
+        (event: { action: string }) => event.action === "task.synchronized",
+      ),
+    ).toHaveLength(syncEvents);
+    const revoked = await send(`${base}/consents`, responsible, "POST", {
+      asset_id: portrait.id,
+      purpose: "portrait_announcement",
+      status: "revoked",
+      scope: "Affiche et communauté",
+      evidence_ref: null,
+      expected_version: (await consent.json()).version,
+    });
+    expect(revoked.status).toBe(200);
+    const invalidated = await (
+      await send(`${base}/workflow`, production)
+    ).json();
+    expect(
+      invalidated.tasks.find(
+        (task: { definition_key: string }) => task.definition_key === "affiche",
+      )?.status,
+    ).toBe("a_faire");
+    expect(
+      invalidated.tasks.find(
+        (task: { definition_key: string }) =>
+          task.definition_key === "validation",
+      )?.status,
+    ).toBe("a_faire");
+    expect(
+      invalidated.history.some(
+        (event: { action: string }) =>
+          event.action === "task.source_invalidated",
+      ),
+    ).toBe(true);
+    expect(
+      (
+        await send(
+          `/api/v1/contents/${poster.id}/publish`,
+          production,
+          "POST",
+          {
+            expected_version: exportedPoster.version,
+            channel: "whatsapp_community",
+          },
+        )
+      ).status,
+    ).toBe(409);
+    const editedMessage = await (
+      await send(`${base}/contents`, production, "POST", {
+        kind: "meeting_link",
+      })
+    ).json();
+    const changed = await send(
+      `/api/v1/contents/${editedMessage.id}`,
+      production,
+      "PATCH",
+      {
+        expected_version: editedMessage.version,
+        fields: { meeting_url: "https://example.invalid/meeting" },
+      },
+    );
+    expect(changed.status).toBe(200);
+    expect(
+      (
+        await send(
+          `/api/v1/contents/${editedMessage.id}`,
+          production,
+          "PATCH",
+          { expected_version: editedMessage.version, body: "ancien" },
+        )
+      ).status,
+    ).toBe(409);
+    const currentEpisode = await (await send(base, responsible)).json();
+    expect(
+      (
+        await send(`${base}/reschedule`, responsible, "POST", {
+          expected_version: currentEpisode.version,
+          start_at_local: "2026-11-17T18:00",
+          event_timezone: "Europe/Paris",
+          reason: "Report fictif pour recette",
+        })
+      ).status,
+    ).toBe(200);
+    const afterReport = await (
+      await send(`${base}/creative`, production)
+    ).json();
+    expect(
+      afterReport.contents.find(
+        (item: { id: string }) => item.id === message.id,
+      ).source_stale,
+    ).toBe(true);
+    expect(
+      (
+        await send(
+          `/api/v1/contents/${editedMessage.id}/submit`,
+          production,
+          "POST",
+          {
+            expected_version: (await changed.json()).version,
+          },
+        )
+      ).status,
+    ).toBe(409);
+  });
+});
+
 afterAll(async () => {
   for (const fixture of fixtures) {
+    await database.pool.query(
+      "DELETE FROM content_publications WHERE content_id IN (SELECT id FROM episode_contents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1))",
+      [fixture.id],
+    );
+    await database.pool.query(
+      "DELETE FROM content_revisions WHERE content_id IN (SELECT id FROM episode_contents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1))",
+      [fixture.id],
+    );
+    await database.pool.query(
+      "DELETE FROM episode_contents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1)",
+      [fixture.id],
+    );
+    await database.pool.query(
+      "DELETE FROM media_consents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1)",
+      [fixture.id],
+    );
+    await database.pool.query(
+      "DELETE FROM media_assets WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1)",
+      [fixture.id],
+    );
     await database.db
       .delete(internalNotifications)
       .where(eq(internalNotifications.recipientUserId, fixture.id));

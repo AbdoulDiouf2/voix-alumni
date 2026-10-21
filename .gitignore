@@ -10,3 +10,5 @@ coverage/
 *.tsbuildinfo
 playwright-report/
 test-results/
+# Owner-supplied visual and media references stay local pending usage rights review.
+Docs/Voix d'alumni/

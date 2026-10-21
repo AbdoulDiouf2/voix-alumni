@@ -1,10 +1,22 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { Hono } from "hono";
 import { z } from "zod";
 import type { createDatabase } from "@voix-alumni/db";
 import {
   businessEvents,
+  contentPublications,
+  contentRevisions,
+  episodeContents,
   episodes,
   episodeStages,
   episodeTasks,
@@ -308,6 +320,236 @@ export function registerLot3Routes(app: Hono<BusinessEnv>, database: Database) {
               JSON.stringify({
                 source_event_id: source.id,
                 source_action: source.action,
+              }),
+            ),
+          );
+      });
+    }
+    // Content evidence is limited to current schedule versions and untouched
+    // predefined tasks. Editing a draft or copying a message is insufficient.
+    const contents = await db
+      .select()
+      .from(episodeContents)
+      .where(
+        and(
+          eq(episodeContents.episodeId, episode.id),
+          eq(episodeContents.scheduleVersion, episode.scheduleVersion),
+        ),
+      );
+    const current = (kind: string) =>
+      contents.find(
+        (item) =>
+          item.kind === kind &&
+          ["valide", "pret_a_publier", "publie"].includes(item.status),
+      );
+    const revisions = contents.length
+      ? await db
+          .select()
+          .from(contentRevisions)
+          .where(
+            or(
+              ...contents.map((item) =>
+                eq(contentRevisions.contentId, item.id),
+              ),
+            ),
+          )
+      : [];
+    const contentEvidence = new Map<
+      string,
+      { id: string; action: string; actorUserId: string; occurredAt: Date }
+    >();
+    const revisionFor = (contentId: string, action: string) =>
+      revisions
+        .filter(
+          (item) => item.contentId === contentId && item.action === action,
+        )
+        .sort((a, b) => b.version - a.version)[0];
+    const announcementPoster = current("announcement_poster");
+    const announcementMessage = current("announcement_message");
+    if (
+      announcementPoster &&
+      ["pret_a_publier", "publie"].includes(announcementPoster.status)
+    ) {
+      const source = revisionFor(announcementPoster.id, "content.exported");
+      if (source) contentEvidence.set("affiche", source);
+    }
+    if (announcementMessage) {
+      const source = revisionFor(announcementMessage.id, "content.approved");
+      if (source) contentEvidence.set("texte", source);
+    }
+    if (announcementPoster && announcementMessage) {
+      const source = [
+        revisionFor(announcementPoster.id, "content.approved"),
+        revisionFor(announcementMessage.id, "content.approved"),
+      ]
+        .filter(Boolean)
+        .sort((a, b) => b!.occurredAt.getTime() - a!.occurredAt.getTime())[0];
+      if (source) contentEvidence.set("validation", source);
+    }
+    const hotThanks = current("hot_thanks");
+    if (hotThanks) {
+      const source = revisionFor(hotThanks.id, "content.approved");
+      if (source) contentEvidence.set("merci", source);
+    }
+    const finalPoster = current("thank_you_poster");
+    if (
+      finalPoster &&
+      ["pret_a_publier", "publie"].includes(finalPoster.status)
+    ) {
+      const source = revisionFor(finalPoster.id, "content.exported");
+      if (source) contentEvidence.set("visuel_final", source);
+    }
+    if (announcementMessage?.status === "publie") {
+      const [publication] = await db
+        .select()
+        .from(contentPublications)
+        .where(eq(contentPublications.contentId, announcementMessage.id))
+        .orderBy(desc(contentPublications.publishedAt))
+        .limit(1);
+      if (publication)
+        contentEvidence.set("publication", {
+          id: publication.id,
+          action: "publication.confirmed",
+          actorUserId: publication.publishedBy,
+          occurredAt: publication.publishedAt,
+        });
+    }
+    const invalidationActor =
+      revisions
+        .filter((item) =>
+          [
+            "content.rights_invalidated",
+            "content.consent_invalidated",
+          ].includes(item.action),
+        )
+        .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())[0]
+        ?.actorUserId ?? episode.updatedBy;
+    const previouslySynchronized = await db
+      .select()
+      .from(episodeTasks)
+      .where(
+        and(
+          eq(episodeTasks.episodeId, episode.id),
+          inArray(episodeTasks.definitionKey, [
+            "affiche",
+            "texte",
+            "validation",
+            "merci",
+            "visuel_final",
+          ]),
+          eq(episodeTasks.status, "terminee"),
+          eq(episodeTasks.version, 2),
+        ),
+      );
+    for (const task of previouslySynchronized) {
+      if (contentEvidence.has(task.definitionKey)) continue;
+      const [sourceEvent] = await db
+        .select()
+        .from(workflowEvents)
+        .where(
+          and(
+            eq(workflowEvents.subjectId, task.id),
+            eq(workflowEvents.action, "task.synchronized"),
+          ),
+        )
+        .orderBy(desc(workflowEvents.occurredAt))
+        .limit(1);
+      if (!sourceEvent?.details?.includes('"source_kind":"content"')) continue;
+      await db.transaction(async (tx) => {
+        await tx
+          .select()
+          .from(episodeStages)
+          .where(
+            and(
+              eq(episodeStages.episodeId, episode.id),
+              eq(episodeStages.number, task.stage),
+            ),
+          )
+          .for("update");
+        const [reopened] = await tx
+          .update(episodeTasks)
+          .set({
+            status: "a_faire",
+            completedBy: null,
+            completedAt: null,
+            version: 3,
+            updatedBy: invalidationActor,
+            updatedAt: new Date(),
+            scheduleVersion: episode.scheduleVersion,
+            dueAt: due(episode.startAtUtc, task.dueOffsetDays),
+          })
+          .where(
+            and(
+              eq(episodeTasks.id, task.id),
+              eq(episodeTasks.version, 2),
+              eq(episodeTasks.status, "terminee"),
+            ),
+          )
+          .returning();
+        if (reopened)
+          await tx.insert(workflowEvents).values(
+            event(
+              episode.id,
+              "task",
+              task.id,
+              "task.source_invalidated",
+              invalidationActor,
+              JSON.stringify({
+                reason: "source_content_no_longer_current",
+                source_event_id: sourceEvent.id,
+              }),
+            ),
+          );
+      });
+    }
+    for (const [key, source] of contentEvidence) {
+      const template = templates.find((item) => item[1] === key);
+      if (!template) continue;
+      await db.transaction(async (tx) => {
+        await tx
+          .select()
+          .from(episodeStages)
+          .where(
+            and(
+              eq(episodeStages.episodeId, episode.id),
+              eq(episodeStages.number, template[0]),
+            ),
+          )
+          .for("update");
+        const [task] = await tx
+          .update(episodeTasks)
+          .set({
+            status: "terminee",
+            completedBy: source.actorUserId,
+            completedAt: source.occurredAt,
+            updatedBy: source.actorUserId,
+            updatedAt: new Date(),
+            version: sql`${episodeTasks.version} + 1`,
+          })
+          .where(
+            and(
+              eq(episodeTasks.episodeId, episode.id),
+              eq(episodeTasks.definitionKey, key),
+              eq(episodeTasks.templateVersion, 1),
+              eq(episodeTasks.title, template[2]),
+              eq(episodeTasks.ownerRole, template[4]),
+              inArray(episodeTasks.version, [1, 3]),
+              eq(episodeTasks.status, "a_faire"),
+            ),
+          )
+          .returning();
+        if (task)
+          await tx.insert(workflowEvents).values(
+            event(
+              episode.id,
+              "task",
+              task.id,
+              "task.synchronized",
+              source.actorUserId,
+              JSON.stringify({
+                source_event_id: source.id,
+                source_action: source.action,
+                source_kind: "content",
               }),
             ),
           );

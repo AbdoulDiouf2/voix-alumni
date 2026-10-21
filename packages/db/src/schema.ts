@@ -269,7 +269,6 @@ export const internalNotifications = pgTable(
   ],
 );
 
-// R2 adapter and upload endpoints are intentionally absent until private buckets exist.
 export const mediaAssets = pgTable(
   "media_assets",
   {
@@ -289,6 +288,10 @@ export const mediaAssets = pgTable(
     byteSize: text("byte_size").notNull(),
     sha256: text("sha256").notNull(),
     rightsStatus: text("rights_status").notNull().default("unknown"),
+    rightsEvidenceRef: text("rights_evidence_ref"),
+    replacesAssetId: text("replaces_asset_id"),
+    version: integer("version").notNull().default(1),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     uploadedBy: text("uploaded_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
@@ -299,6 +302,134 @@ export const mediaAssets = pgTable(
   (table) => [
     index("media_assets_alumni_idx").on(table.alumniId),
     index("media_assets_episode_idx").on(table.episodeId),
+  ],
+);
+
+export const mediaConsents = pgTable(
+  "media_consents",
+  {
+    id: text("id").primaryKey(),
+    assetId: text("asset_id")
+      .notNull()
+      .references(() => mediaAssets.id, { onDelete: "restrict" }),
+    episodeId: text("episode_id")
+      .notNull()
+      .references(() => episodes.id, { onDelete: "restrict" }),
+    purpose: text("purpose").notNull(),
+    status: text("status").notNull(),
+    scope: text("scope").notNull(),
+    evidenceRef: text("evidence_ref"),
+    recordedBy: text("recorded_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    recordedAt: timestamp("recorded_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    version: integer("version").notNull().default(1),
+  },
+  (table) => [
+    uniqueIndex("media_consent_asset_purpose_idx").on(
+      table.assetId,
+      table.purpose,
+    ),
+  ],
+);
+
+export const episodeContents = pgTable(
+  "episode_contents",
+  {
+    id: text("id").primaryKey(),
+    episodeId: text("episode_id")
+      .notNull()
+      .references(() => episodes.id, { onDelete: "restrict" }),
+    kind: text("kind").notNull(),
+    templateKey: text("template_key").notNull(),
+    templateVersion: integer("template_version").notNull().default(1),
+    status: text("status").notNull().default("brouillon"),
+    version: integer("version").notNull().default(1),
+    scheduleVersion: integer("schedule_version").notNull(),
+    body: text("body").notNull(),
+    fieldsJson: text("fields_json").notNull().default("{}"),
+    sourceJson: text("source_json").notNull().default("{}"),
+    portraitAssetId: text("portrait_asset_id").references(
+      () => mediaAssets.id,
+      { onDelete: "restrict" },
+    ),
+    approvedBy: text("approved_by").references(() => user.id, {
+      onDelete: "restrict",
+    }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    exportedAt: timestamp("exported_at", { withTimezone: true }),
+    exportedAssetId: text("exported_asset_id").references(
+      () => mediaAssets.id,
+      { onDelete: "restrict" },
+    ),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    updatedBy: text("updated_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [index("episode_contents_episode_idx").on(table.episodeId)],
+);
+
+export const contentRevisions = pgTable(
+  "content_revisions",
+  {
+    id: text("id").primaryKey(),
+    contentId: text("content_id")
+      .notNull()
+      .references(() => episodeContents.id, { onDelete: "restrict" }),
+    version: integer("version").notNull(),
+    action: text("action").notNull(),
+    body: text("body").notNull(),
+    fieldsJson: text("fields_json").notNull(),
+    actorUserId: text("actor_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("content_revisions_version_idx").on(
+      table.contentId,
+      table.version,
+    ),
+  ],
+);
+
+export const contentPublications = pgTable(
+  "content_publications",
+  {
+    id: text("id").primaryKey(),
+    contentId: text("content_id")
+      .notNull()
+      .references(() => episodeContents.id, { onDelete: "restrict" }),
+    contentVersion: integer("content_version").notNull(),
+    channel: text("channel").notNull(),
+    proofRef: text("proof_ref"),
+    publishedBy: text("published_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    publishedAt: timestamp("published_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("content_publications_version_channel_idx").on(
+      table.contentId,
+      table.contentVersion,
+      table.channel,
+    ),
   ],
 );
 

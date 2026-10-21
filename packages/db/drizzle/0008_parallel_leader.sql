@@ -1,0 +1,1 @@
+ALTER TABLE "episode_contents" ADD COLUMN "source_json" text DEFAULT '{}' NOT NULL;

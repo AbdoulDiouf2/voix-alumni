@@ -1,37 +1,28 @@
 # État courant du projet — Voix d'Alumni Studio
 
-> **Dernière actualisation :** 2026-10-21 15:07 Europe/Paris. Les résultats ci-dessous sont des observations locales ; la CI distante et la production ne sont pas vérifiées.
+> **Observé localement le 21 octobre 2026 à 18:57 Europe/Paris.** La CI distante, Cloudflare R2 réel et la production ne sont pas vérifiés.
 
-## Lot, phase et Git
+## Git et phase
 
-- **Lot actuel :** Lot 3 validé fonctionnellement pour passage en Pull Request ; vérification mobile préalable au push réalisée, avec une correction ciblée. Lot 4 bloqué.
-- **Branche :** `feat/lot-3-workflows`, commit de clôture antérieur `e603698` vérifié propre avant contrôle mobile. Correction mobile commitée dans `de10d7e` et branche poussée sur GitHub ; SHA distant `de10d7e478b4ef2be3a2c93608641c75f0c04542` vérifié par `git ls-remote`. Mise à jour documentaire de cette publication à commiter sur la même branche. Aucun PR, merge ni déploiement.
-- **Périmètre :** seul le dépôt Voix d'Alumni est modifié. La maquette HTML est inchangée, SHA-256 vérifié `5c65b156ca85f517b9328b8843e16739602371bdf3bb0d80b89bf1a6cc3e1b5c`.
+- **Lot actuel :** Lot 4 — Studio créatif et communications, implémenté et testé localement ; en attente de validation du propriétaire. Lot 5 non autorisé.
+- **Branche :** `feat/lot-4-creative-communications`, issue de `origin/main` `10f3939` (fusion PR #3). Le snapshot du Lot 4 est destiné à un commit local sur cette branche ; le SHA exact est à relever dans Git après commit. Aucun push, PR, merge ni déploiement autorisé ou exécuté.
+- **Maquette :** `Docs/voix_alumni_studio_prototype.html` inchangée, SHA-256 `5c65b156ca85f517b9328b8843e16739602371bdf3bb0d80b89bf1a6cc3e1b5c`.
 
-## Fonctionnalités terminées et vérifiées localement
+## Fonctionnalités vérifiées
 
-- **Lots 0–1 :** socle TypeScript/PostgreSQL et authentification Better Auth dans Hono, rôles RESPONSABLE/PRODUCTION, inscription fermée, interface responsive. Les parcours navigateur du Lot 1 repassent dans la recette finale.
-- **Vivier Lot 2 :** fiches potentielles sans épisode ; création, consultation, édition, archivage, recherche, filtres, tri et pagination ; suivi du contact réservé à la Responsable ; doublons signalés sans blocage ; audit des changements sans copie des notes privées.
-- **Épisodes Lot 2 :** plusieurs épisodes par intervenant ; dates envisagée/confirmée distinctes ; zones IANA et rejet des heures locales ambiguës ou inexistantes ; confirmation, report motivé, annulation motivée, historique et version de concurrence. Les épisodes réalisés ne disposent d'aucune mutation Lot 2. Numéros 1–11 réservés ; nouveau numéro à partir de 12 après confirmation.
-- **Relais :** transmission interne par la Responsable d'un épisode confirmé suffisamment renseigné ; notification Production et lecture du dossier après reconnexion. Un portrait manquant est signalé mais n'empêche pas le relais. Aucun envoi externe ni publication.
-- **Interface :** écrans desktop/mobile connectés à l'API et PostgreSQL ; dates visibles et saisies en `jj/mm/aaaa HH:mm`, offset et zone IANA dans les affichages ; libellés métier clarifiés ; espace mobile sous la navigation fixe vérifié sur les formulaires longs. Huit captures Lot 2 sont issues uniquement de la base E2E fictive.
-- **Lot 3 :** 24 tâches prédéfinies réparties sur huit étapes et copiées par épisode, tâches personnalisées, adaptation du titre/propriétaire/caractère obligatoire/échéance dans le fuseau IANA, statut et commentaire ; validations d'étapes séparées ; progression et historique ; demandes internes adressées côté serveur uniquement à la Responsable ; réponses et résolution distinctes ; notifications internes lues/non lues. Trois tâches prédéfinies intactes sont synchronisées de manière idempotente et auditée avec contact effectif, confirmation et relais ; fiche à vérifier et tâches adaptées restent manuelles. Les étapes distinguent « À venir », « En cours », « Tâches terminées » et « Étape validée », avec plusieurs étapes actives possibles. Mobile compact à étapes, demandes et historiques repliables ; historique affiché en français. Les tâches de publication, tenue de session, replay et partage de feedback restent non terminables avant leurs modules métier. Quatre captures Lot 3 fictives desktop/mobile, dont deux vues ciblées du parcours, générées et la vue desktop inspectée.
+- **Lots 0–3 :** fondations, authentification fermée, vivier, épisodes, relais, huit étapes, tâches, demandes internes et notifications sont conservés. La suite Playwright complète passe après le Lot 4.
+- **Lot 4 :** deux modèles d'affiche Canvas 1080 × 1350 avec aperçu/export cohérents ; éditeur de champs, cadrage et noir et blanc ; six modèles de communication ; versions et historique ; brouillon, relecture, validation Responsable, export/prêt, puis publication externe constatée manuellement. Le studio, les communications et la médiathèque sont accessibles dans la navigation et depuis l'épisode. Les contenus obsolètes après modification de fiche/date sont signalés et bloqués pour nouvelle validation, export ou publication.
+- **Sécurité et données :** migrations additives `0006`–`0008`, ressources privées, droits et consentement par finalité contrôlés côté Hono, rôles et versions de concurrence, publication distincte de l'export et de la copie. L'export PNG et son média sont enregistrés atomiquement ; objet supprimé si conflit. Les tâches prédéfinies intactes correspondantes se synchronisent avec preuves de contenu, sans valider d'étape ; invalidation de droits rouvre les tâches concernées avec audit.
+- **Références ajoutées par le propriétaire :** `Docs/Voix d'alumni/` est conservé localement et exclu de Git. Les affiches ont servi de référence à la composition. Portraits, vidéos et profils n'ont pas été importés ni commités. Les logos ESMT/CPS ne sont pas fournis comme fichiers séparés ; aucune autorisation d'usage réelle n'est présumée.
 
-## Tests, environnements et déploiements
+## Tests et environnements
 
-- **Dernière passe locale après correction mobile :** suite Playwright complète Lots 1–3 desktop/mobile : 15 réussites, 1 test mobile ignoré sur desktop, zéro échec ; 20 commandes vérifiées atteignables dans un viewport 390 × 664. Format, lint, typecheck, build et `git diff --check` réussis. API 16/16 lors de la passe du commit `e603698` ; pas de changement API depuis. CI distante et production non vérifiées.
-- **Isolation :** `voix_alumni_e2e` est la seule base visée par Playwright ; API 8877 et web 5174 dédiés. Le serveur et la recette refusent une cible non E2E. Préparation limitée à cette base. Les migrations additives `0004` et `0005` ont été appliquées aux bases propres au projet dev/test/E2E ; aucun schéma d'une autre application modifié. Le nombre actuel de données E2E n'est pas inventorié ; la base dev n'a pas reçu de fixture de la recette Lot 3. Les comptes fictifs restent privés hors Git.
-- **Environnement :** Node 24 isolé, PostgreSQL propre au projet ; environ 13 Gio disponibles au dernier contrôle après suppression automatique du conteneur Playwright jetable. Aucun bucket R2, image applicative, CI distante ou déploiement lancé. Aucun état des applications voisines n'est inféré.
+- **Qualité finale :** format, lint, typecheck, build, `git diff --check` réussis ; API 17/17.
+- **Playwright après dernières corrections :** Lots 1–4 desktop/mobile, 17 réussites, 1 ignoré intentionnellement sur desktop, 0 échec. Captures et PNG uniquement de données fictives dans `Docs/recette/lot-4/`. Parité des pixels aperçu/PNG, export réel 1080 × 1350, publication manuelle distincte de la copie, texte trop long signalé et visibilité du bouton mobile pendant le défilement vérifiés.
+- **Isolation :** migrations Lot 4 appliquées aux bases projet `voix_alumni_dev`, test et E2E ; la cible dev a été vérifiée par nom avant migration. `voix_alumni_e2e` et serveurs dédiés 8877/5174 utilisés pour Playwright. L'image Playwright locale apporte les bibliothèques Chromium manquantes sur l'hôte. Aucun bucket R2, clé ni donnée réelle créée. Le dossier propriétaire n'a pas été importé en base.
 
-## Blocages, problèmes connus et risques
+## Limites et prochaine porte
 
-- **Médias :** modèle et abstraction préparés ; aucun upload réel ni URL signée sans buckets R2 privés. Toute future publication utilisant un portrait devra vérifier les droits côté serveur (`DEC-010`).
-- **Historique :** épisodes 1–9 réalisés, 10 prochaine session, 11 planifiée ultérieurement selon la correction du propriétaire. Leur reprise réelle n'est pas faite ; rapprochement avec la source historique requis avant usage métier réel (`DEC-009`).
-- **Fonctions ultérieures :** publication, studio, feedback, média, constat de session et clôture des épisodes hors Lot 3. Heure de la session du 25 octobre 2026 toujours à confirmer auprès de la Responsable.
-- **Sécurité/production :** callback Google OAuth réel non testé ; avis npm modérés transitifs analysés au Lot 1 ; proxy de confiance, sauvegardes, R2 et ressources VPS restent des préalables de production.
-- **Incident résolu :** une première exécution E2E isolée a subi une limitation Better Auth et généré des fichiers temporaires contenant les mots de passe fictifs ; ceux-ci ont été supprimés, les mots de passe tournés et les sessions révoquées. Limiteur désactivé uniquement en mode E2E avec garde de base exact. Voir le journal du 21 octobre.
-
-## Décisions en attente et prochaine action
-
-- Confirmer l'heure réelle de la session du 25 octobre, préparer la source d'import historique 1–11 et les futurs buckets R2 seulement aux lots autorisés. Les actions métier de publication et de replay requièrent les lots suivants.
-- **Prochaine action concrète :** commiter et pousser la traçabilité post-publication, confirmer le SHA distant définitif, puis attendre les prochaines instructions du propriétaire. Aucun déploiement ni Lot 4.
+- Tester R2 avec deux buckets privés sous juridiction UE et identifiants fournis/approuvés avant toute mise en service ; l'adaptateur actuel est vérifié seulement via stockage isolé. Les logos autonomes officiels et preuves de droits pour les portraits/citations restent à fournir/valider pour une recette sur ressources réelles.
+- L'heure réelle du 25 octobre 2026, l'import historique 1–11, le callback Google réel, les sauvegardes et paramètres de production restent ouverts selon les décisions antérieures. Feedback natif, Teams/YouTube, moteur post-production et Lot 5 restent hors périmètre.
+- **Prochaine porte :** présenter les preuves et limites au propriétaire et attendre sa validation. Aucun push, PR, merge ou déploiement.
