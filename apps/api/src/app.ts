@@ -83,6 +83,43 @@ export function createApp({ auth, database }: Dependencies) {
     await next();
   });
 
+  app.use("/api/v1/*", async (c, next) => {
+    if (["GET", "HEAD", "OPTIONS"].includes(c.req.method)) return next();
+    const path = c.req.path;
+    if (
+      /^\/api\/v1\/episodes\/[^/]+\/feedback\/responses\/[^/]+$/.test(path) &&
+      c.req.method === "DELETE"
+    )
+      return next();
+    const episodeMatch = path.match(/^\/api\/v1\/episodes\/([^/]+)(?:\/|$)/);
+    const contentMatch = path.match(/^\/api\/v1\/contents\/([^/]+)(?:\/|$)/);
+    const requestMatch = path.match(/^\/api\/v1\/requests\/([^/]+)(?:\/|$)/);
+    let episodeId = episodeMatch?.[1];
+    if (contentMatch) {
+      const result = await database.pool.query<{ episode_id: string }>(
+        "SELECT episode_id FROM episode_contents WHERE id=$1",
+        [contentMatch[1]],
+      );
+      episodeId = result.rows[0]?.episode_id;
+    }
+    if (requestMatch) {
+      const result = await database.pool.query<{ episode_id: string }>(
+        "SELECT episode_id FROM information_requests WHERE id=$1",
+        [requestMatch[1]],
+      );
+      episodeId = result.rows[0]?.episode_id;
+    }
+    if (episodeId) {
+      const result = await database.pool.query<{ status: string }>(
+        "SELECT status FROM episodes WHERE id=$1",
+        [episodeId],
+      );
+      if (result.rows[0]?.status === "cloture")
+        return c.json({ error: { code: "EPISODE_CLOSED" } }, 409);
+    }
+    await next();
+  });
+
   app.get("/api/v1/me", (c) => {
     const { user, role } = c.get("organizer");
     return c.json(

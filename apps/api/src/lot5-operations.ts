@@ -178,6 +178,7 @@ export function registerLot5OperationRoutes(
       )
     ).rows[0];
   const syncReminders = async (episode: Episode) => {
+    if (episode.status === "cloture") return;
     const stalePlan = await pool.query(
       "UPDATE session_plans SET access_status='a_verifier',access_checked_by=NULL,access_checked_at=NULL,schedule_version=$2,version=version+1 WHERE episode_id=$1 AND schedule_version<>$2 RETURNING episode_id",
       [episode.id, episode.schedule_version],
@@ -1113,6 +1114,10 @@ export function registerLot5OperationRoutes(
         await client.query("ROLLBACK");
         return c.json({ error: { code: "VERSION_CONFLICT" } }, 409);
       }
+      await client.query(
+        "UPDATE feedback_forms SET status='closed',token_hash=NULL,closed_at=now(),version=version+1,updated_by=$2,updated_at=now() WHERE episode_id=$1 AND status='open'",
+        [episode.id, actor.user.id],
+      );
       const changed = await client.query(
         "UPDATE episodes SET status='cloture',version=version+1,updated_by=$2,updated_at=now() WHERE id=$1 AND version=$3 AND status IN ('realise','postproduction') RETURNING id",
         [episode.id, actor.user.id, episode.version],
@@ -1121,14 +1126,11 @@ export function registerLot5OperationRoutes(
         await client.query("ROLLBACK");
         return c.json({ error: { code: "EPISODE_CHANGED" } }, 409);
       }
-      await client.query("COMMIT");
-      await event(
-        episode.id,
-        "closure",
-        episode.id,
-        "closure.approved",
-        actor.user.id,
+      await client.query(
+        "INSERT INTO workflow_events(id,episode_id,subject_type,subject_id,action,actor_user_id) VALUES($1,$2,'closure',$2,'closure.approved',$3)",
+        [randomUUID(), episode.id, actor.user.id],
       );
+      await client.query("COMMIT");
       return c.json({ status: "cloture" });
     } catch (error) {
       await client.query("ROLLBACK");

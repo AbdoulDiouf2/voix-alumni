@@ -764,6 +764,33 @@ export const feedbackResponses = pgTable(
   ],
 );
 
+export const feedbackRetentionRuns = pgTable("feedback_retention_runs", {
+  id: text("id").primaryKey(),
+  source: text("source").notNull(),
+  initiatedBy: text("initiated_by").references(() => user.id),
+  status: text("status").notNull(),
+  purgedCount: integer("purged_count").notNull().default(0),
+  errorCode: text("error_code"),
+  startedAt: timestamp("started_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+});
+
+export const feedbackRetentionItems = pgTable("feedback_retention_items", {
+  id: text("id").primaryKey(),
+  runId: text("run_id")
+    .notNull()
+    .references(() => feedbackRetentionRuns.id, { onDelete: "restrict" }),
+  formId: text("form_id")
+    .notNull()
+    .references(() => feedbackForms.id, { onDelete: "restrict" }),
+  purgedCount: integer("purged_count").notNull(),
+  occurredAt: timestamp("occurred_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 export const feedbackImports = pgTable(
   "feedback_imports",
   {

@@ -241,7 +241,13 @@ export function PublicFeedback() {
   return (
     <main className="lot5-public">
       <div className="lot5-public-head">
-        <span>VOIX D’ALUMNI</span>
+        <img
+          className="lot5-public-logo"
+          src="/brand/voix-alumni-horizontal.png"
+          alt="Voix d’Alumni"
+          width="882"
+          height="254"
+        />
         <h1>Votre retour sur la session</h1>
         <p>Quelques minutes pour partager votre expérience.</p>
       </div>
@@ -1187,8 +1193,10 @@ export function EpisodeFeedback({ organizer }: { organizer: Organizer }) {
     notice_text: string;
     retention_days: number;
   } | null>(null);
+  const [realOpenReady, setRealOpenReady] = useState(false);
+  const [fixtureMode, setFixtureMode] = useState(false);
   const [notice, setNotice] = useState("");
-  const [days, setDays] = useState(365);
+  const [days, setDays] = useState(180);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [editing, setEditing] = useState(false);
@@ -1207,11 +1215,17 @@ export function EpisodeFeedback({ organizer }: { organizer: Organizer }) {
     const [feedback, answerData, policyData] = await Promise.all([
       api<Feedback>(`/episodes/${id}/feedback`),
       api<{ items: typeof responses }>(`/episodes/${id}/feedback/responses`),
-      api<{ policy: typeof policy }>("/feedback/policy"),
+      api<{
+        policy: typeof policy;
+        real_open_ready: boolean;
+        fixture_mode: boolean;
+      }>("/feedback/policy"),
     ]);
     setData(feedback);
     setResponses(answerData.items);
     setPolicy(policyData.policy);
+    setRealOpenReady(policyData.real_open_ready);
+    setFixtureMode(policyData.fixture_mode);
     setNotice(
       feedback.versions[0]?.notice_text ?? policyData.policy?.notice_text ?? "",
     );
@@ -1277,8 +1291,9 @@ export function EpisodeFeedback({ organizer }: { organizer: Organizer }) {
         <span className="eyebrow">FEEDBACK NATIF</span>
         <h1>Questionnaire et résultats</h1>
         <p>
-          Réponses anonymes, versions conservées, ouverture distincte de la
-          validation.
+          Réponses sans identité demandée, versions conservées, ouverture
+          distincte de la validation. Un commentaire libre peut identifier son
+          auteur.
         </p>
         <Link to={`/episodes/${id}`}>← Fiche épisode</Link>
       </header>
@@ -1300,12 +1315,20 @@ export function EpisodeFeedback({ organizer }: { organizer: Organizer }) {
             <h2>Modèle et confidentialité</h2>
             {policy ? (
               <p>
-                Notice approuvée · conservation {policy.retention_days} jours
+                {fixtureMode ? "Notice fictive de recette" : "Notice approuvée"}{" "}
+                · conservation {policy.retention_days} jours
               </p>
             ) : (
               <p>
                 Aucune notice approuvée. Le questionnaire public ne peut pas
                 être ouvert.
+              </p>
+            )}
+            {!realOpenReady && (
+              <p>
+                Ouverture réelle bloquée : identité et contact du responsable,
+                base juridique, hébergement et notice complète restent à
+                valider.
               </p>
             )}
             {organizer.role === "RESPONSABLE" && (
@@ -1412,15 +1435,18 @@ export function EpisodeFeedback({ organizer }: { organizer: Organizer }) {
                       <button
                         className="lot2-button primary"
                         disabled={
+                          !realOpenReady ||
                           !data.versions[0]?.approved_at ||
                           !data.form.retention_days
                         }
                         title={
-                          !data.versions[0]?.approved_at
-                            ? "Validation de la Responsable nécessaire"
-                            : !data.form.retention_days
-                              ? "Notice et rétention nécessaires"
-                              : ""
+                          !realOpenReady
+                            ? "Informations de confidentialité réelles non approuvées"
+                            : !data.versions[0]?.approved_at
+                              ? "Validation de la Responsable nécessaire"
+                              : !data.form.retention_days
+                                ? "Notice et rétention nécessaires"
+                                : ""
                         }
                         onClick={() => {
                           if (

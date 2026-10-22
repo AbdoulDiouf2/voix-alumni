@@ -16,6 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
 import { auth, configuredGoogleProvider, database } from "./auth.js";
 import { resolveLocalDateTime } from "./lot2.js";
+import { runFeedbackRetention } from "./feedback-retention.js";
 import sharp from "sharp";
 import { createObjectStore } from "./storage.js";
 
@@ -1171,12 +1172,12 @@ describe("Lot 5 feedback and session operations", () => {
         .due_at,
     ).toBe(j1.due_at);
     const notice =
-      "Notice strictement fictive de recette : réponses anonymes, utilisées uniquement pour les tests isolés et supprimées après la recette.";
+      "Notice strictement fictive de recette : aucune identité demandée, commentaires potentiellement identifiants, réponses utilisées uniquement pour les tests isolés.";
     expect(
       (
         await send("/api/v1/feedback/policy", production, "POST", {
           notice_text: notice,
-          retention_days: 30,
+          retention_days: 180,
           confirmed: true,
         })
       ).status,
@@ -1185,7 +1186,7 @@ describe("Lot 5 feedback and session operations", () => {
       (
         await send("/api/v1/feedback/policy", responsable, "POST", {
           notice_text: notice,
-          retention_days: 30,
+          retention_days: 180,
           confirmed: true,
         })
       ).status,
@@ -1518,6 +1519,11 @@ describe("Lot 5 feedback and session operations", () => {
       })
     ).json();
     expect(preparedClosure.status).toBe("prepared");
+    const tokenBeforeArchive = (
+      await (await send(`${base}/feedback`, production)).json()
+    ).form.public_url
+      .split("/")
+      .at(-1);
     expect(
       (
         await send(`${base}/closure/approve`, production, "POST", {
@@ -1541,12 +1547,103 @@ describe("Lot 5 feedback and session operations", () => {
     expect(archived.transcripts[0].reviewed_at).toBeTruthy();
     expect(archived.quotes[0].status).toBe("approved");
     expect(archived.closure.exceptions_json).toContain("final_poster");
+    expect(
+      (await request(`/api/public/feedback/${tokenBeforeArchive}`)).status,
+    ).toBe(404);
+    expect(
+      (
+        await request(`/api/public/feedback/${tokenBeforeArchive}/responses`, {
+          method: "POST",
+        })
+      ).status,
+    ).toBe(404);
+    for (const [path, method] of [
+      [base, "PATCH"],
+      [`${base}/session-plan`, "PUT"],
+      [`${base}/feedback/import/commit`, "POST"],
+      [`${base}/closure/prepare`, "POST"],
+      [`/api/v1/contents/${thanks.id}`, "PATCH"],
+    ] as const)
+      expect((await send(path, production, method, {})).status).toBe(409);
+    await expect(
+      database.pool.query(
+        "UPDATE episodes SET title='Mutation interdite' WHERE id=$1",
+        [episode.id],
+      ),
+    ).rejects.toMatchObject({ code: "P0001" });
+    await expect(
+      database.pool.query(
+        "INSERT INTO content_publications(id,content_id,content_version,channel,published_by) VALUES($1,$2,1,'other',$3)",
+        [randomUUID(), thanks.id, fixtures[0].id],
+      ),
+    ).rejects.toMatchObject({ code: "P0001" });
+    const archivedAsset = (
+      await database.pool.query<{ id: string; version: number }>(
+        "SELECT id,version FROM media_assets WHERE episode_id=$1 LIMIT 1",
+        [episode.id],
+      )
+    ).rows[0];
+    expect(archivedAsset).toBeTruthy();
+    expect(
+      (
+        await send(
+          `/api/v1/assets/${archivedAsset.id}/rights`,
+          responsable,
+          "PATCH",
+          {
+            expected_version: archivedAsset.version,
+            status: "granted",
+            evidence_ref: "Preuve fictive",
+          },
+        )
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await send(
+          `/api/v1/assets/${archivedAsset.id}/rights`,
+          production,
+          "PATCH",
+          {
+            expected_version: archivedAsset.version,
+            status: "revoked",
+            evidence_ref: "Retrait fictif",
+          },
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await send(
+          `/api/v1/assets/${archivedAsset.id}/rights`,
+          responsable,
+          "PATCH",
+          {
+            expected_version: archivedAsset.version,
+            status: "revoked",
+            evidence_ref: "Retrait fictif",
+          },
+        )
+      ).status,
+    ).toBe(200);
+    const rightsAudit = await database.pool.query<{ action: string }>(
+      "SELECT action FROM workflow_events WHERE episode_id=$1 AND subject_id=$2 ORDER BY occurred_at DESC LIMIT 1",
+      [episode.id, archivedAsset.id],
+    );
+    expect(rightsAudit.rows[0].action).toBe(
+      "media.rights_revoked_after_closure",
+    );
+    expect(archived.closure.exceptions_json).toContain("replay_message");
     const activeResponses = await (
       await send(`${base}/feedback/responses`, production)
     ).json();
+    const legacyResponse = activeResponses.items.find(
+      (item: { source: string }) => item.source === "legacy",
+    );
+    expect(legacyResponse).toBeTruthy();
     await database.pool.query(
-      "UPDATE feedback_responses SET submitted_at=now()-interval '31 days' WHERE id=$1",
-      [activeResponses.items[0].id],
+      "UPDATE feedback_responses SET submitted_at=now()-interval '181 days' WHERE id=$1",
+      [legacyResponse.id],
     );
     expect(
       (
@@ -1565,6 +1662,42 @@ describe("Lot 5 feedback and session operations", () => {
       })
     ).json();
     expect(purged.purged).toBeGreaterThanOrEqual(1);
+    const retentionRun = await database.pool.query<{
+      status: string;
+      source: string;
+      purged_count: number;
+      initiated_by: string | null;
+    }>(
+      "SELECT status,source,purged_count,initiated_by FROM feedback_retention_runs ORDER BY started_at DESC LIMIT 1",
+    );
+    expect(retentionRun.rows[0]).toMatchObject({
+      status: "completed",
+      source: "manual",
+      initiated_by: fixtures[0].id,
+    });
+    expect(retentionRun.rows[0].purged_count).toBeGreaterThanOrEqual(1);
+    const redacted = await database.pool.query<{
+      answers_json: string;
+      dedupe_hash: string | null;
+      import_id: string | null;
+    }>(
+      "SELECT answers_json,dedupe_hash,import_id FROM feedback_responses WHERE id=$1",
+      [legacyResponse.id],
+    );
+    expect(redacted.rows[0]).toMatchObject({
+      answers_json: "{}",
+      dedupe_hash: null,
+      import_id: null,
+    });
+    const scheduled = await runFeedbackRetention(database, "scheduled");
+    expect(scheduled).toMatchObject({ status: "completed", purged: 0 });
+    expect(
+      (
+        await send("/api/v1/feedback/retention/purge", responsable, "POST", {
+          confirmed: true,
+        })
+      ).status,
+    ).toBe(200);
     expect(
       (await (await send(`${base}/feedback/responses`, production)).json())
         .items,
@@ -1573,82 +1706,123 @@ describe("Lot 5 feedback and session operations", () => {
 });
 
 afterAll(async () => {
-  for (const fixture of fixtures) {
-    const episodeIds = "SELECT id FROM episodes WHERE created_by=$1";
-    await database.pool.query(
-      `DELETE FROM feedback_responses WHERE form_id IN (SELECT id FROM feedback_forms WHERE episode_id IN (${episodeIds}))`,
-      [fixture.id],
-    );
-    await database.pool.query(
-      `DELETE FROM feedback_imports WHERE form_id IN (SELECT id FROM feedback_forms WHERE episode_id IN (${episodeIds}))`,
-      [fixture.id],
-    );
-    await database.pool.query(
-      `DELETE FROM feedback_form_versions WHERE form_id IN (SELECT id FROM feedback_forms WHERE episode_id IN (${episodeIds}))`,
-      [fixture.id],
-    );
-    for (const table of [
-      "feedback_forms",
-      "episode_closures",
-      "episode_quotes",
-      "episode_transcripts",
-      "episode_replays",
-      "session_questions",
-      "session_reminders",
-      "session_plans",
-    ])
+  if (process.env.APP_ENV !== "test")
+    throw new Error("Nettoyage des fixtures interdit hors environnement test");
+  const guardedTables = [
+    "episodes",
+    "episode_tasks",
+    "information_requests",
+    "episode_stages",
+    "session_plans",
+    "session_questions",
+    "session_reminders",
+    "feedback_forms",
+    "episode_replays",
+    "episode_transcripts",
+    "episode_quotes",
+    "episode_closures",
+    "episode_contents",
+    "content_revisions",
+    "content_publications",
+    "feedback_form_versions",
+    "feedback_imports",
+    "feedback_responses",
+    "media_assets",
+  ];
+  for (const table of guardedTables)
+    await database.pool.query(`ALTER TABLE ${table} DISABLE TRIGGER USER`);
+  try {
+    for (const fixture of fixtures) {
+      const episodeIds = "SELECT id FROM episodes WHERE created_by=$1";
       await database.pool.query(
-        `DELETE FROM ${table} WHERE episode_id IN (${episodeIds})`,
+        `DELETE FROM feedback_retention_items WHERE form_id IN (SELECT id FROM feedback_forms WHERE episode_id IN (${episodeIds}))`,
         [fixture.id],
       );
+      await database.pool.query(
+        `DELETE FROM feedback_responses WHERE form_id IN (SELECT id FROM feedback_forms WHERE episode_id IN (${episodeIds}))`,
+        [fixture.id],
+      );
+      await database.pool.query(
+        `DELETE FROM feedback_imports WHERE form_id IN (SELECT id FROM feedback_forms WHERE episode_id IN (${episodeIds}))`,
+        [fixture.id],
+      );
+      await database.pool.query(
+        `DELETE FROM feedback_form_versions WHERE form_id IN (SELECT id FROM feedback_forms WHERE episode_id IN (${episodeIds}))`,
+        [fixture.id],
+      );
+      for (const table of [
+        "feedback_forms",
+        "episode_closures",
+        "episode_quotes",
+        "episode_transcripts",
+        "episode_replays",
+        "session_questions",
+        "session_reminders",
+        "session_plans",
+      ])
+        await database.pool.query(
+          `DELETE FROM ${table} WHERE episode_id IN (${episodeIds})`,
+          [fixture.id],
+        );
+      await database.pool.query(
+        "DELETE FROM content_publications WHERE content_id IN (SELECT id FROM episode_contents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1))",
+        [fixture.id],
+      );
+      await database.pool.query(
+        "DELETE FROM content_revisions WHERE content_id IN (SELECT id FROM episode_contents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1))",
+        [fixture.id],
+      );
+      await database.pool.query(
+        "DELETE FROM episode_contents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1)",
+        [fixture.id],
+      );
+      await database.pool.query(
+        "DELETE FROM media_consents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1)",
+        [fixture.id],
+      );
+      const fixtureAssets = await database.pool.query<{ storage_key: string }>(
+        "SELECT storage_key FROM media_assets WHERE episode_id IN (SELECT id FROM episodes WHERE created_by=$1)",
+        [fixture.id],
+      );
+      const store = createObjectStore();
+      for (const item of fixtureAssets.rows)
+        await store?.removeObject(item.storage_key);
+      await database.pool.query(
+        "DELETE FROM media_assets WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1)",
+        [fixture.id],
+      );
+      await database.db
+        .delete(internalNotifications)
+        .where(eq(internalNotifications.recipientUserId, fixture.id));
+      await database.db
+        .delete(businessEvents)
+        .where(eq(businessEvents.actorUserId, fixture.id));
+      await database.db
+        .delete(episodes)
+        .where(eq(episodes.createdBy, fixture.id));
+      await database.db.delete(alumni).where(eq(alumni.createdBy, fixture.id));
+      await database.db
+        .delete(securityEvents)
+        .where(eq(securityEvents.userId, fixture.id));
+      await database.db
+        .delete(organizerMemberships)
+        .where(eq(organizerMemberships.userId, fixture.id));
+      await database.pool.query(
+        "DELETE FROM feedback_policies WHERE approved_by=$1",
+        [fixture.id],
+      );
+      await database.pool.query(
+        "DELETE FROM feedback_retention_runs WHERE initiated_by=$1 AND id NOT IN (SELECT run_id FROM feedback_retention_items)",
+        [fixture.id],
+      );
+      await database.db.delete(user).where(eq(user.id, fixture.id));
+    }
     await database.pool.query(
-      "DELETE FROM content_publications WHERE content_id IN (SELECT id FROM episode_contents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1))",
-      [fixture.id],
+      "DELETE FROM feedback_retention_runs WHERE source IN ('manual','scheduled') AND id NOT IN (SELECT run_id FROM feedback_retention_items)",
     );
-    await database.pool.query(
-      "DELETE FROM content_revisions WHERE content_id IN (SELECT id FROM episode_contents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1))",
-      [fixture.id],
-    );
-    await database.pool.query(
-      "DELETE FROM episode_contents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1)",
-      [fixture.id],
-    );
-    await database.pool.query(
-      "DELETE FROM media_consents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1)",
-      [fixture.id],
-    );
-    const fixtureAssets = await database.pool.query<{ storage_key: string }>(
-      "SELECT storage_key FROM media_assets WHERE episode_id IN (SELECT id FROM episodes WHERE created_by=$1)",
-      [fixture.id],
-    );
-    const store = createObjectStore();
-    for (const item of fixtureAssets.rows)
-      await store?.removeObject(item.storage_key);
-    await database.pool.query(
-      "DELETE FROM media_assets WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1)",
-      [fixture.id],
-    );
-    await database.db
-      .delete(internalNotifications)
-      .where(eq(internalNotifications.recipientUserId, fixture.id));
-    await database.db
-      .delete(businessEvents)
-      .where(eq(businessEvents.actorUserId, fixture.id));
-    await database.db
-      .delete(episodes)
-      .where(eq(episodes.createdBy, fixture.id));
-    await database.db.delete(alumni).where(eq(alumni.createdBy, fixture.id));
-    await database.db
-      .delete(securityEvents)
-      .where(eq(securityEvents.userId, fixture.id));
-    await database.db
-      .delete(organizerMemberships)
-      .where(eq(organizerMemberships.userId, fixture.id));
-    await database.pool.query(
-      "DELETE FROM feedback_policies WHERE approved_by=$1",
-      [fixture.id],
-    );
-    await database.db.delete(user).where(eq(user.id, fixture.id));
+  } finally {
+    for (const table of guardedTables)
+      await database.pool.query(`ALTER TABLE ${table} ENABLE TRIGGER USER`);
   }
   await database.pool.end();
 });

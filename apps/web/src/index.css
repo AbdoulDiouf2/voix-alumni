@@ -1864,11 +1864,12 @@ a {
   padding: 48px 0 22px;
   text-align: center;
 }
-.lot5-public-head span {
-  color: var(--gold);
-  letter-spacing: 0.2em;
-  font-size: 12px;
-  font-weight: 700;
+.lot5-public-logo {
+  display: block;
+  width: min(100%, 330px);
+  height: auto;
+  margin: 0 auto 20px;
+  object-fit: contain;
 }
 .lot5-public-head h1 {
   font-family: Georgia, serif;

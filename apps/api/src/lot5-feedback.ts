@@ -2,6 +2,7 @@ import { createHash, createHmac, randomUUID } from "node:crypto";
 import type { Hono } from "hono";
 import type { createDatabase } from "@voix-alumni/db";
 import type { BusinessEnv } from "./lot2.js";
+import { runFeedbackRetention } from "./feedback-retention.js";
 
 type Database = ReturnType<typeof createDatabase>;
 type Question = {
@@ -78,6 +79,14 @@ export const standardFeedbackQuestions: Question[] = [
 ];
 const digest = (value: string) =>
   createHash("sha256").update(value).digest("hex");
+const realFeedbackConfigured = () =>
+  ["test", "e2e"].includes(process.env.APP_ENV ?? "") ||
+  (process.env.FEEDBACK_REAL_OPEN_APPROVED === "true" &&
+    Boolean(process.env.FEEDBACK_PRIVACY_CONTROLLER?.trim()) &&
+    Boolean(process.env.FEEDBACK_PRIVACY_CONTACT?.trim()) &&
+    Boolean(process.env.FEEDBACK_PRIVACY_LEGAL_BASIS?.trim()) &&
+    Boolean(process.env.FEEDBACK_PRIVACY_HOSTING?.trim()) &&
+    Boolean(process.env.FEEDBACK_PRIVACY_NOTICE_URL?.trim()));
 const tokenFor = (form: Form, generation: number) =>
   createHmac("sha256", process.env.BETTER_AUTH_SECRET ?? "")
     .update(`feedback:${form.id}:${generation}`)
@@ -373,6 +382,8 @@ export function registerLot5FeedbackRoutes(
     return c.json({
       policy: row,
       standard_questions: standardFeedbackQuestions,
+      real_open_ready: realFeedbackConfigured(),
+      fixture_mode: ["test", "e2e"].includes(process.env.APP_ENV ?? ""),
     });
   });
   app.post("/api/v1/feedback/policy", async (c) => {
@@ -611,6 +622,8 @@ export function registerLot5FeedbackRoutes(
       id = c.req.param("id");
     if (actor.role !== "PRODUCTION")
       return c.json({ error: { code: "FORBIDDEN" } }, 403);
+    if (!realFeedbackConfigured())
+      return c.json({ error: { code: "PRIVACY_REVIEW_REQUIRED" } }, 409);
     if (!(await allowed(id, actor.role)))
       return c.json({ error: { code: "NOT_FOUND" } }, 404);
     const form = await formFor(id),
@@ -742,35 +755,20 @@ export function registerLot5FeedbackRoutes(
     if (actor.role !== "RESPONSABLE")
       return c.json({ error: { code: "FORBIDDEN" } }, 403);
     const body = (await json(c.req.raw)) as Record<string, unknown> | null;
-    const rows = (
-      await pool.query<{ id: string; form_id: string }>(
-        "SELECT r.id,r.form_id FROM feedback_responses r JOIN feedback_forms f ON f.id=r.form_id WHERE r.deleted_at IS NULL AND f.retention_days IS NOT NULL AND r.submitted_at < now() - f.retention_days * interval '1 day' ORDER BY r.submitted_at LIMIT 1000",
-      )
-    ).rows;
-    if (body?.confirmed !== true)
-      return c.json({ eligible: rows.length, purged: 0 });
-    if (!rows.length) return c.json({ eligible: 0, purged: 0 });
-    const ids = rows.map((row) => row.id);
-    await pool.query(
-      "UPDATE feedback_responses SET answers_json='{}',deleted_at=now(),deleted_by=$2 WHERE id=ANY($1::text[]) AND deleted_at IS NULL",
-      [ids, actor.user.id],
-    );
-    for (const formId of new Set(rows.map((row) => row.form_id))) {
-      const episode = (
-        await pool.query<{ episode_id: string }>(
-          "SELECT episode_id FROM feedback_forms WHERE id=$1",
-          [formId],
-        )
-      ).rows[0];
-      if (episode)
-        await event(
-          episode.episode_id,
-          formId,
-          "feedback.retention_purged",
-          actor.user.id,
-        );
+    if (body?.confirmed !== true) {
+      const eligible = await pool.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM feedback_responses r JOIN feedback_forms f ON f.id=r.form_id WHERE r.deleted_at IS NULL AND f.retention_days IS NOT NULL AND r.submitted_at < now() - f.retention_days * interval '1 day'",
+      );
+      return c.json({ eligible: Number(eligible.rows[0].count), purged: 0 });
     }
-    return c.json({ eligible: rows.length, purged: rows.length });
+    const result = await runFeedbackRetention(
+      database,
+      "manual",
+      actor.user.id,
+    );
+    if (result.status === "already_running")
+      return c.json({ error: { code: "PURGE_ALREADY_RUNNING" } }, 409);
+    return c.json({ eligible: result.purged, purged: result.purged });
   });
   app.get("/api/v1/episodes/:id/feedback/export.csv", async (c) => {
     const actor = c.get("organizer"),

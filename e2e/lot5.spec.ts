@@ -57,10 +57,10 @@ test("Lot 5 : réunion, questionnaire public, résultat et conduite mobile", asy
     expected_version: confirmed.version,
   });
   const notice =
-    "NOTICE FICTIVE DE RECETTE. Cette réponse anonyme est utilisée seulement dans la base E2E isolée et sera supprimée après vérification. Aucun participant réel ne doit utiliser ce lien.";
+    "NOTICE FICTIVE DE RECETTE. Aucune identité n'est demandée ; un commentaire libre peut identifier son auteur. Réponses utilisées seulement dans la base E2E isolée. Aucun participant réel ne doit utiliser ce lien.";
   await post(owner, "/api/v1/feedback/policy", {
     notice_text: notice,
-    retention_days: 30,
+    retention_days: 180,
     confirmed: true,
   });
   await login(page, "PRODUCTION");
@@ -113,6 +113,11 @@ test("Lot 5 : réunion, questionnaire public, résultat et conduite mobile", asy
   await expect(
     visitor.getByRole("heading", { name: "Votre retour sur la session" }),
   ).toBeVisible();
+  const logo = visitor.getByRole("img", { name: "Voix d’Alumni" });
+  await expect(logo).toBeVisible();
+  await expect
+    .poll(() => logo.evaluate((image: HTMLImageElement) => image.naturalWidth))
+    .toBe(882);
   await expect(visitor.getByText(notice)).toBeVisible();
   await visitor.screenshot({
     path: `Docs/recette/lot-5/formulaire-public-${testInfo.project.name}.png`,
