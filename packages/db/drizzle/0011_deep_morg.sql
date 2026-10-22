@@ -1,0 +1,1 @@
+ALTER TABLE "feedback_forms" ADD COLUMN "token_generation" integer DEFAULT 0 NOT NULL;

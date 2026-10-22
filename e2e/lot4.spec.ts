@@ -240,6 +240,22 @@ test("Lot 4 : deux affiches et communications versionnées", async ({
       fields.quote =
         "Les opportunités se construisent avec curiosité, confiance et la volonté de partager ce que l’on apprend ensemble.";
       fields.quote_approved = "true";
+      const quote = await (
+        await page.request.post(`${base}/quotes`, {
+          data: {
+            exact_text: fields.quote,
+            source_ref:
+              "Citation fictive de recette, texte fourni par la fixture",
+          },
+        })
+      ).json();
+      expect(
+        (
+          await responsible.request.post(`${base}/quotes/${quote.id}/approve`, {
+            data: { expected_version: 1, confirmed_exact: true },
+          })
+        ).status(),
+      ).toBe(200);
     }
     const edited = await (
       await page.request.patch(`/api/v1/contents/${created.id}`, {

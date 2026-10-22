@@ -16,7 +16,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "./app.js";
 import { auth, configuredGoogleProvider, database } from "./auth.js";
 import { resolveLocalDateTime } from "./lot2.js";
+import { runFeedbackRetention } from "./feedback-retention.js";
 import sharp from "sharp";
+import { createObjectStore } from "./storage.js";
 
 const app = createApp({ auth, database });
 const origin = process.env.BETTER_AUTH_URL ?? "http://127.0.0.1:5173";
@@ -785,6 +787,22 @@ describe("Lot 4 creative workflow", () => {
         )
       ).status,
     ).toBe(409);
+    const verifiedQuote = await (
+      await send(`${base}/quotes`, production, "POST", {
+        exact_text: "Une citation fictive pour la recette",
+        source_ref: "Source fictive de recette documentée",
+      })
+    ).json();
+    expect(
+      (
+        await send(
+          `${base}/quotes/${verifiedQuote.id}/approve`,
+          responsible,
+          "POST",
+          { expected_version: 1, confirmed_exact: true },
+        )
+      ).status,
+    ).toBe(200);
     const thanksConfirmed = await (
       await send(`/api/v1/contents/${thanks.id}`, production, "PATCH", {
         expected_version: thanksReview.version,
@@ -975,45 +993,836 @@ describe("Lot 4 creative workflow", () => {
   });
 });
 
+describe("Lot 5 feedback and session operations", () => {
+  it("keeps roles, public tokens, versions, reminders and imports coherent", async () => {
+    const responsable = await login(fixtures[0].email),
+      production = await login(fixtures[1].email);
+    const send = (
+      path: string,
+      cookie: string | null,
+      method = "GET",
+      payload?: unknown,
+      extra?: Record<string, string>,
+    ) =>
+      request(path, {
+        method,
+        headers: {
+          ...(cookie ? { cookie } : {}),
+          "content-type": "application/json",
+          ...extra,
+        },
+        body: payload === undefined ? undefined : JSON.stringify(payload),
+      });
+    const person = await (
+      await send("/api/v1/alumni", responsable, "POST", {
+        full_name: "Lot Cinq Fictif",
+        job_title: "Fonction fictive",
+        company: "Organisation fictive",
+      })
+    ).json();
+    const episode = await (
+      await send("/api/v1/episodes", responsable, "POST", {
+        alumni_id: person.id,
+      })
+    ).json();
+    const base = `/api/v1/episodes/${episode.id}`;
+    expect((await send(`${base}/operations`, production)).status).toBe(404);
+    const confirmed = await (
+      await send(`${base}/confirm`, responsable, "POST", {
+        expected_version: episode.version,
+        start_at_local: "2026-10-25T18:00",
+        event_timezone: "Europe/Paris",
+      })
+    ).json();
+    expect(
+      (
+        await send(`${base}/handoff`, responsable, "POST", {
+          expected_version: confirmed.version,
+        })
+      ).status,
+    ).toBe(200);
+    const first = await (await send(`${base}/operations`, production)).json();
+    expect(first.reminders).toHaveLength(5);
+    expect(
+      (
+        await send(`${base}/session-plan`, responsable, "PUT", {
+          teams_url: "https://teams.microsoft.com/l/meetup-join/test",
+          expected_version: null,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await send(`${base}/session-plan`, production, "PUT", {
+          teams_url: "https://teams.microsoft.com/l/meetup-join/test",
+          fallback_url: null,
+          expected_version: null,
+        })
+      ).status,
+    ).toBe(200);
+    const plan = await (await send(`${base}/operations`, production)).json();
+    expect(plan.plan.teams_url).toContain("teams.microsoft.com");
+    const concurrent = await Promise.all([
+      send(`${base}/session-plan`, production, "PUT", {
+        teams_url: "https://teams.microsoft.com/l/meetup-join/first",
+        fallback_url: null,
+        expected_version: plan.plan.version,
+      }),
+      send(`${base}/session-plan`, production, "PUT", {
+        teams_url: "https://teams.microsoft.com/l/meetup-join/second",
+        fallback_url: null,
+        expected_version: plan.plan.version,
+      }),
+    ]);
+    expect(concurrent.map((response) => response.status).sort()).toEqual([
+      200, 409,
+    ]);
+    const currentPlan = await (
+      await send(`${base}/operations`, production)
+    ).json();
+    expect(
+      (
+        await send(`${base}/session-plan/check-access`, production, "POST", {
+          expected_version: currentPlan.plan.version,
+          status: "accessible",
+          confirmed_manual_check: true,
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (await send(`${base}/questions/initialize`, production, "POST", {}))
+        .status,
+    ).toBe(201);
+    const conductor = await (
+      await send(`${base}/operations`, responsable)
+    ).json();
+    expect(conductor.questions).toHaveLength(6);
+    expect(
+      (
+        await send(`${base}/conductor/approve`, production, "POST", {
+          expected_version: conductor.plan.version,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await send(`${base}/conductor/approve`, responsable, "POST", {
+          expected_version: conductor.plan.version,
+        })
+      ).status,
+    ).toBe(200);
+    const beforeReport = await (
+      await send(`${base}/operations`, production)
+    ).json();
+    const j1 = beforeReport.reminders.find(
+      (item: { key: string }) => item.key === "j_1",
+    );
+    expect(
+      (
+        await send(`${base}/reminders/j_1/complete`, production, "POST", {
+          expected_version: j1.version,
+        })
+      ).status,
+    ).toBe(200);
+    const beforeChange = await (await send(base, responsable)).json();
+    expect(
+      (
+        await send(`${base}/reschedule`, responsable, "POST", {
+          expected_version: beforeChange.version,
+          start_at_local: "2026-11-12T18:00",
+          event_timezone: "Europe/Paris",
+          reason: "Changement de date fictif",
+        })
+      ).status,
+    ).toBe(200);
+    const afterReport = await (
+      await send(`${base}/operations`, production)
+    ).json();
+    expect(afterReport.plan.access_status).toBe("a_verifier");
+    expect(
+      afterReport.reminders.find((item: { key: string }) => item.key === "j_1")
+        .due_at,
+    ).toBe(j1.due_at);
+    expect(
+      afterReport.reminders.find((item: { key: string }) => item.key === "j_7")
+        .due_at,
+    ).toBeNull();
+    const proposed = await (await send(base, responsable)).json();
+    expect(
+      (
+        await send(`${base}/confirm`, responsable, "POST", {
+          expected_version: proposed.version,
+          start_at_local: "2026-11-12T18:00",
+          event_timezone: "Europe/Paris",
+        })
+      ).status,
+    ).toBe(200);
+    const reconfirmed = await (
+      await send(`${base}/operations`, production)
+    ).json();
+    expect(
+      reconfirmed.reminders.find((item: { key: string }) => item.key === "j_7")
+        .due_at,
+    ).not.toBe(
+      beforeReport.reminders.find((item: { key: string }) => item.key === "j_7")
+        .due_at,
+    );
+    expect(
+      reconfirmed.reminders.find((item: { key: string }) => item.key === "j_1")
+        .due_at,
+    ).toBe(j1.due_at);
+    const notice =
+      "Notice strictement fictive de recette : aucune identité demandée, commentaires potentiellement identifiants, réponses utilisées uniquement pour les tests isolés.";
+    expect(
+      (
+        await send("/api/v1/feedback/policy", production, "POST", {
+          notice_text: notice,
+          retention_days: 180,
+          confirmed: true,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await send("/api/v1/feedback/policy", responsable, "POST", {
+          notice_text: notice,
+          retention_days: 180,
+          confirmed: true,
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (await send(`${base}/feedback`, production, "POST", {})).status,
+    ).toBe(201);
+    const draft = await (await send(`${base}/feedback`, production)).json();
+    expect(draft.versions[0].standard_unchanged).toBe(true);
+    expect(
+      (
+        await send(`${base}/feedback/open`, production, "POST", {
+          expected_version: draft.form.version,
+          confirmed: true,
+        })
+      ).status,
+    ).toBe(200);
+    const opened = await (await send(`${base}/feedback`, production)).json();
+    const token = opened.form.public_url.split("/").at(-1);
+    expect((await request(`/api/public/feedback/${token}`)).status).toBe(200);
+    expect(
+      (
+        await request(`/api/public/feedback/${token}/responses`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "idempotency-key": randomUUID(),
+          },
+          body: JSON.stringify({
+            notice_version: opened.versions[0].notice_version,
+            answers: {
+              rating: 5,
+              attendance: "En direct",
+              best: "Échange fictif",
+            },
+          }),
+        })
+      ).status,
+    ).toBe(201);
+    const repeatedKey = randomUUID();
+    const submit = () =>
+      request(`/api/public/feedback/${token}/responses`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "idempotency-key": repeatedKey,
+        },
+        body: JSON.stringify({
+          notice_version: opened.versions[0].notice_version,
+          answers: { rating: 4 },
+        }),
+      });
+    expect((await submit()).status).toBe(201);
+    expect((await submit()).status).toBe(200);
+    expect((await send(`${base}/feedback/responses`, null)).status).toBe(401);
+    expect((await send(`${base}/feedback`, responsable)).status).toBe(200);
+    const results = await (await send(`${base}/feedback`, production)).json();
+    expect(results.summary.count).toBe(2);
+    const csv = "rating,relevance,attendance\n3,Oui,En replay\n";
+    const mapping = {
+      rating: "rating",
+      relevance: "relevance",
+      attendance: "attendance",
+    };
+    const preview = await (
+      await send(`${base}/feedback/import/preview`, production, "POST", {
+        csv,
+        mapping,
+      })
+    ).json();
+    expect(preview.valid).toBe(1);
+    expect(
+      (
+        await send(`${base}/feedback/import/commit`, production, "POST", {
+          csv,
+          mapping,
+          confirmed: true,
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await (
+          await send(`${base}/feedback/import/commit`, production, "POST", {
+            csv,
+            mapping,
+            confirmed: true,
+          })
+        ).json()
+      ).inserted,
+    ).toBe(0);
+    expect(
+      (await send(`${base}/feedback/export.csv`, production)).headers.get(
+        "content-type",
+      ),
+    ).toContain("text/csv");
+    expect(
+      (
+        await send(`${base}/mark-held`, production, "POST", {
+          expected_version: 3,
+          confirmed_held: true,
+        })
+      ).status,
+    ).toBe(403);
+    const currentEpisode = await (await send(base, responsable)).json();
+    expect(
+      (
+        await send(`${base}/mark-held`, responsable, "POST", {
+          expected_version: currentEpisode.version,
+          confirmed_held: true,
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await send(`${base}/feedback/closed`, production, "POST", {
+          expected_version: opened.form.version,
+        })
+      ).status,
+    ).toBe(200);
+    expect((await request(`/api/public/feedback/${token}`)).status).toBe(410);
+    const beforeEdit = await (
+      await send(`${base}/feedback`, production)
+    ).json();
+    const changedQuestions = beforeEdit.versions[0].questions.map(
+      (item: { id: string; label: string }) =>
+        item.id === "best"
+          ? { ...item, label: "Quel moment fictif retenez-vous ?" }
+          : item,
+    );
+    expect(
+      (
+        await send(`${base}/feedback`, production, "PATCH", {
+          expected_version: beforeEdit.form.version,
+          questions: changedQuestions,
+          notice_text: notice,
+        })
+      ).status,
+    ).toBe(200);
+    const edited = await (await send(`${base}/feedback`, production)).json();
+    expect(edited.summary.count).toBe(3);
+    expect(edited.versions).toHaveLength(2);
+    expect(edited.versions[0].approved_at).toBeNull();
+    expect(
+      (
+        await send(`${base}/feedback/open`, production, "POST", {
+          expected_version: edited.form.version,
+          confirmed: true,
+        })
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await send(`${base}/feedback/approve`, responsable, "POST", {
+          expected_version: edited.form.version,
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await send(`${base}/feedback/open`, production, "POST", {
+          expected_version: edited.form.version,
+          confirmed: true,
+        })
+      ).status,
+    ).toBe(200);
+    const workflow = await (await send(`${base}/workflow`, production)).json();
+    expect(
+      workflow.tasks.find(
+        (task: { definition_key: string }) =>
+          task.definition_key === "presence",
+      ).status,
+    ).toBe("terminee");
+    expect(workflow.stages[5].completed).toBe(false);
+    expect(
+      (
+        await send(`${base}/closure/prepare`, production, "POST", {
+          expected_version: null,
+          exceptions: {},
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await send(`${base}/closure/approve`, responsable, "POST", {
+          expected_version: 1,
+          confirmed_archive: true,
+        })
+      ).status,
+    ).toBe(409);
+    const thanks = await (
+      await send(`${base}/contents`, production, "POST", { kind: "hot_thanks" })
+    ).json();
+    const thanksEdited = await (
+      await send(`/api/v1/contents/${thanks.id}`, production, "PATCH", {
+        expected_version: thanks.version,
+        fields: {
+          feedback_url: `http://127.0.0.1:5173/feedback/public/${token}`,
+        },
+      })
+    ).json();
+    const thanksReview = await (
+      await send(`/api/v1/contents/${thanks.id}/submit`, production, "POST", {
+        expected_version: thanksEdited.version,
+      })
+    ).json();
+    const thanksApproved = await (
+      await send(`/api/v1/contents/${thanks.id}/approve`, responsable, "POST", {
+        expected_version: thanksReview.version,
+      })
+    ).json();
+    const readyForm = new FormData();
+    readyForm.append("expected_version", String(thanksApproved.version));
+    const thanksReady = await (
+      await request(`/api/v1/contents/${thanks.id}/export`, {
+        method: "POST",
+        headers: { cookie: production },
+        body: readyForm,
+      })
+    ).json();
+    expect(
+      (
+        await send(
+          `/api/v1/contents/${thanks.id}/publish`,
+          production,
+          "POST",
+          {
+            expected_version: thanksReady.version,
+            channel: "whatsapp_community",
+            confirmed_external_publication: true,
+          },
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await send(`${base}/replay`, production, "PUT", {
+          youtube_url: "https://youtu.be/abcdefghijk",
+          visibility: "unlisted",
+          status: "available",
+          recording_rights: "unknown",
+          diffusion_rights: "unknown",
+          expected_version: null,
+        })
+      ).status,
+    ).toBe(422);
+    expect(
+      (
+        await send(`${base}/replay`, production, "PUT", {
+          youtube_url: "https://youtu.be/abcdefghijk",
+          visibility: "unlisted",
+          status: "available",
+          recording_rights: "granted",
+          diffusion_rights: "granted",
+          rights_evidence_ref: "Autorisation fictive documentée",
+          expected_version: null,
+        })
+      ).status,
+    ).toBe(200);
+    const transcriptForm = new FormData();
+    transcriptForm.append(
+      "file",
+      new File(
+        [
+          "WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nUne phrase fictive de recette.",
+        ],
+        "recette.vtt",
+        { type: "text/vtt" },
+      ),
+    );
+    transcriptForm.append("language", "fr");
+    transcriptForm.append(
+      "provenance",
+      "Transcription fictive générée pour la recette",
+    );
+    const uploaded = await request(`${base}/transcripts`, {
+      method: "POST",
+      headers: { cookie: production },
+      body: transcriptForm,
+    });
+    expect(uploaded.status).toBe(201);
+    const transcript = await uploaded.json();
+    expect(
+      (await send(`${base}/transcripts/${transcript.id}`, production)).status,
+    ).toBe(200);
+    expect(
+      (
+        await send(
+          `${base}/transcripts/${transcript.id}/review`,
+          production,
+          "POST",
+          {
+            corrected_text: "Une phrase fictive de recette.",
+            confirmed_review: true,
+          },
+        )
+      ).status,
+    ).toBe(200);
+    const quote = await (
+      await send(`${base}/quotes`, production, "POST", {
+        transcript_id: transcript.id,
+        exact_text: "Une phrase fictive de recette.",
+        source_ref: "recette.vtt, 00:00:01",
+      })
+    ).json();
+    expect(
+      (
+        await send(`${base}/quotes/${quote.id}/approve`, production, "POST", {
+          expected_version: 1,
+          confirmed_exact: true,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await send(`${base}/quotes/${quote.id}/approve`, responsable, "POST", {
+          expected_version: 1,
+          confirmed_exact: true,
+        })
+      ).status,
+    ).toBe(200);
+    const preparedClosure = await (
+      await send(`${base}/closure/prepare`, production, "POST", {
+        expected_version: 1,
+        exceptions: {
+          final_poster:
+            "Affiche finale indisponible pour cette recette synthétique.",
+          replay_message: "Diffusion du message replay reportée et documentée.",
+        },
+      })
+    ).json();
+    expect(preparedClosure.status).toBe("prepared");
+    const tokenBeforeArchive = (
+      await (await send(`${base}/feedback`, production)).json()
+    ).form.public_url
+      .split("/")
+      .at(-1);
+    expect(
+      (
+        await send(`${base}/closure/approve`, production, "POST", {
+          expected_version: preparedClosure.version,
+          confirmed_archive: true,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await send(`${base}/closure/approve`, responsable, "POST", {
+          expected_version: preparedClosure.version,
+          confirmed_archive: true,
+        })
+      ).status,
+    ).toBe(200);
+    const archived = await (
+      await send(`${base}/operations`, production)
+    ).json();
+    expect(archived.episode.status).toBe("cloture");
+    expect(archived.transcripts[0].reviewed_at).toBeTruthy();
+    expect(archived.quotes[0].status).toBe("approved");
+    expect(archived.closure.exceptions_json).toContain("final_poster");
+    expect(
+      (await request(`/api/public/feedback/${tokenBeforeArchive}`)).status,
+    ).toBe(404);
+    expect(
+      (
+        await request(`/api/public/feedback/${tokenBeforeArchive}/responses`, {
+          method: "POST",
+        })
+      ).status,
+    ).toBe(404);
+    for (const [path, method] of [
+      [base, "PATCH"],
+      [`${base}/session-plan`, "PUT"],
+      [`${base}/feedback/import/commit`, "POST"],
+      [`${base}/closure/prepare`, "POST"],
+      [`/api/v1/contents/${thanks.id}`, "PATCH"],
+    ] as const)
+      expect((await send(path, production, method, {})).status).toBe(409);
+    await expect(
+      database.pool.query(
+        "UPDATE episodes SET title='Mutation interdite' WHERE id=$1",
+        [episode.id],
+      ),
+    ).rejects.toMatchObject({ code: "P0001" });
+    await expect(
+      database.pool.query(
+        "INSERT INTO content_publications(id,content_id,content_version,channel,published_by) VALUES($1,$2,1,'other',$3)",
+        [randomUUID(), thanks.id, fixtures[0].id],
+      ),
+    ).rejects.toMatchObject({ code: "P0001" });
+    const archivedAsset = (
+      await database.pool.query<{ id: string; version: number }>(
+        "SELECT id,version FROM media_assets WHERE episode_id=$1 LIMIT 1",
+        [episode.id],
+      )
+    ).rows[0];
+    expect(archivedAsset).toBeTruthy();
+    expect(
+      (
+        await send(
+          `/api/v1/assets/${archivedAsset.id}/rights`,
+          responsable,
+          "PATCH",
+          {
+            expected_version: archivedAsset.version,
+            status: "granted",
+            evidence_ref: "Preuve fictive",
+          },
+        )
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await send(
+          `/api/v1/assets/${archivedAsset.id}/rights`,
+          production,
+          "PATCH",
+          {
+            expected_version: archivedAsset.version,
+            status: "revoked",
+            evidence_ref: "Retrait fictif",
+          },
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await send(
+          `/api/v1/assets/${archivedAsset.id}/rights`,
+          responsable,
+          "PATCH",
+          {
+            expected_version: archivedAsset.version,
+            status: "revoked",
+            evidence_ref: "Retrait fictif",
+          },
+        )
+      ).status,
+    ).toBe(200);
+    const rightsAudit = await database.pool.query<{ action: string }>(
+      "SELECT action FROM workflow_events WHERE episode_id=$1 AND subject_id=$2 ORDER BY occurred_at DESC LIMIT 1",
+      [episode.id, archivedAsset.id],
+    );
+    expect(rightsAudit.rows[0].action).toBe(
+      "media.rights_revoked_after_closure",
+    );
+    expect(archived.closure.exceptions_json).toContain("replay_message");
+    const activeResponses = await (
+      await send(`${base}/feedback/responses`, production)
+    ).json();
+    const legacyResponse = activeResponses.items.find(
+      (item: { source: string }) => item.source === "legacy",
+    );
+    expect(legacyResponse).toBeTruthy();
+    await database.pool.query(
+      "UPDATE feedback_responses SET submitted_at=now()-interval '181 days' WHERE id=$1",
+      [legacyResponse.id],
+    );
+    expect(
+      (
+        await send("/api/v1/feedback/retention/purge", production, "POST", {
+          confirmed: true,
+        })
+      ).status,
+    ).toBe(403);
+    const eligible = await (
+      await send("/api/v1/feedback/retention/purge", responsable, "POST", {})
+    ).json();
+    expect(eligible.eligible).toBeGreaterThanOrEqual(1);
+    const purged = await (
+      await send("/api/v1/feedback/retention/purge", responsable, "POST", {
+        confirmed: true,
+      })
+    ).json();
+    expect(purged.purged).toBeGreaterThanOrEqual(1);
+    const retentionRun = await database.pool.query<{
+      status: string;
+      source: string;
+      purged_count: number;
+      initiated_by: string | null;
+    }>(
+      "SELECT status,source,purged_count,initiated_by FROM feedback_retention_runs ORDER BY started_at DESC LIMIT 1",
+    );
+    expect(retentionRun.rows[0]).toMatchObject({
+      status: "completed",
+      source: "manual",
+      initiated_by: fixtures[0].id,
+    });
+    expect(retentionRun.rows[0].purged_count).toBeGreaterThanOrEqual(1);
+    const redacted = await database.pool.query<{
+      answers_json: string;
+      dedupe_hash: string | null;
+      import_id: string | null;
+    }>(
+      "SELECT answers_json,dedupe_hash,import_id FROM feedback_responses WHERE id=$1",
+      [legacyResponse.id],
+    );
+    expect(redacted.rows[0]).toMatchObject({
+      answers_json: "{}",
+      dedupe_hash: null,
+      import_id: null,
+    });
+    const scheduled = await runFeedbackRetention(database, "scheduled");
+    expect(scheduled).toMatchObject({ status: "completed", purged: 0 });
+    expect(
+      (
+        await send("/api/v1/feedback/retention/purge", responsable, "POST", {
+          confirmed: true,
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (await (await send(`${base}/feedback/responses`, production)).json())
+        .items,
+    ).toHaveLength(2);
+  });
+});
+
 afterAll(async () => {
-  for (const fixture of fixtures) {
+  if (process.env.APP_ENV !== "test")
+    throw new Error("Nettoyage des fixtures interdit hors environnement test");
+  const guardedTables = [
+    "episodes",
+    "episode_tasks",
+    "information_requests",
+    "episode_stages",
+    "session_plans",
+    "session_questions",
+    "session_reminders",
+    "feedback_forms",
+    "episode_replays",
+    "episode_transcripts",
+    "episode_quotes",
+    "episode_closures",
+    "episode_contents",
+    "content_revisions",
+    "content_publications",
+    "feedback_form_versions",
+    "feedback_imports",
+    "feedback_responses",
+    "media_assets",
+  ];
+  for (const table of guardedTables)
+    await database.pool.query(`ALTER TABLE ${table} DISABLE TRIGGER USER`);
+  try {
+    for (const fixture of fixtures) {
+      const episodeIds = "SELECT id FROM episodes WHERE created_by=$1";
+      await database.pool.query(
+        `DELETE FROM feedback_retention_items WHERE form_id IN (SELECT id FROM feedback_forms WHERE episode_id IN (${episodeIds}))`,
+        [fixture.id],
+      );
+      await database.pool.query(
+        `DELETE FROM feedback_responses WHERE form_id IN (SELECT id FROM feedback_forms WHERE episode_id IN (${episodeIds}))`,
+        [fixture.id],
+      );
+      await database.pool.query(
+        `DELETE FROM feedback_imports WHERE form_id IN (SELECT id FROM feedback_forms WHERE episode_id IN (${episodeIds}))`,
+        [fixture.id],
+      );
+      await database.pool.query(
+        `DELETE FROM feedback_form_versions WHERE form_id IN (SELECT id FROM feedback_forms WHERE episode_id IN (${episodeIds}))`,
+        [fixture.id],
+      );
+      for (const table of [
+        "feedback_forms",
+        "episode_closures",
+        "episode_quotes",
+        "episode_transcripts",
+        "episode_replays",
+        "session_questions",
+        "session_reminders",
+        "session_plans",
+      ])
+        await database.pool.query(
+          `DELETE FROM ${table} WHERE episode_id IN (${episodeIds})`,
+          [fixture.id],
+        );
+      await database.pool.query(
+        "DELETE FROM content_publications WHERE content_id IN (SELECT id FROM episode_contents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1))",
+        [fixture.id],
+      );
+      await database.pool.query(
+        "DELETE FROM content_revisions WHERE content_id IN (SELECT id FROM episode_contents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1))",
+        [fixture.id],
+      );
+      await database.pool.query(
+        "DELETE FROM episode_contents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1)",
+        [fixture.id],
+      );
+      await database.pool.query(
+        "DELETE FROM media_consents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1)",
+        [fixture.id],
+      );
+      const fixtureAssets = await database.pool.query<{ storage_key: string }>(
+        "SELECT storage_key FROM media_assets WHERE episode_id IN (SELECT id FROM episodes WHERE created_by=$1)",
+        [fixture.id],
+      );
+      const store = createObjectStore();
+      for (const item of fixtureAssets.rows)
+        await store?.removeObject(item.storage_key);
+      await database.pool.query(
+        "DELETE FROM media_assets WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1)",
+        [fixture.id],
+      );
+      await database.db
+        .delete(internalNotifications)
+        .where(eq(internalNotifications.recipientUserId, fixture.id));
+      await database.db
+        .delete(businessEvents)
+        .where(eq(businessEvents.actorUserId, fixture.id));
+      await database.db
+        .delete(episodes)
+        .where(eq(episodes.createdBy, fixture.id));
+      await database.db.delete(alumni).where(eq(alumni.createdBy, fixture.id));
+      await database.db
+        .delete(securityEvents)
+        .where(eq(securityEvents.userId, fixture.id));
+      await database.db
+        .delete(organizerMemberships)
+        .where(eq(organizerMemberships.userId, fixture.id));
+      await database.pool.query(
+        "DELETE FROM feedback_policies WHERE approved_by=$1",
+        [fixture.id],
+      );
+      await database.pool.query(
+        "DELETE FROM feedback_retention_runs WHERE initiated_by=$1 AND id NOT IN (SELECT run_id FROM feedback_retention_items)",
+        [fixture.id],
+      );
+      await database.db.delete(user).where(eq(user.id, fixture.id));
+    }
     await database.pool.query(
-      "DELETE FROM content_publications WHERE content_id IN (SELECT id FROM episode_contents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1))",
-      [fixture.id],
+      "DELETE FROM feedback_retention_runs WHERE source IN ('manual','scheduled') AND id NOT IN (SELECT run_id FROM feedback_retention_items)",
     );
-    await database.pool.query(
-      "DELETE FROM content_revisions WHERE content_id IN (SELECT id FROM episode_contents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1))",
-      [fixture.id],
-    );
-    await database.pool.query(
-      "DELETE FROM episode_contents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1)",
-      [fixture.id],
-    );
-    await database.pool.query(
-      "DELETE FROM media_consents WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1)",
-      [fixture.id],
-    );
-    await database.pool.query(
-      "DELETE FROM media_assets WHERE episode_id IN (SELECT id FROM episodes WHERE created_by = $1)",
-      [fixture.id],
-    );
-    await database.db
-      .delete(internalNotifications)
-      .where(eq(internalNotifications.recipientUserId, fixture.id));
-    await database.db
-      .delete(businessEvents)
-      .where(eq(businessEvents.actorUserId, fixture.id));
-    await database.db
-      .delete(episodes)
-      .where(eq(episodes.createdBy, fixture.id));
-    await database.db.delete(alumni).where(eq(alumni.createdBy, fixture.id));
-    await database.db
-      .delete(securityEvents)
-      .where(eq(securityEvents.userId, fixture.id));
-    await database.db
-      .delete(organizerMemberships)
-      .where(eq(organizerMemberships.userId, fixture.id));
-    await database.db.delete(user).where(eq(user.id, fixture.id));
+  } finally {
+    for (const table of guardedTables)
+      await database.pool.query(`ALTER TABLE ${table} ENABLE TRIGGER USER`);
   }
   await database.pool.end();
 });

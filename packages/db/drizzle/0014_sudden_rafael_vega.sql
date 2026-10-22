@@ -1,0 +1,2 @@
+ALTER TABLE "feedback_retention_runs" ADD COLUMN "initiated_by" text;--> statement-breakpoint
+ALTER TABLE "feedback_retention_runs" ADD CONSTRAINT "feedback_retention_runs_initiated_by_user_id_fk" FOREIGN KEY ("initiated_by") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;

@@ -56,6 +56,7 @@ Ce registre conserve les décisions approuvées et leurs remplacements. Une nouv
 - **Justification :** minimiser les données et distinguer les différentes autorisations d'usage.
 - **Conséquences :** règles documentées ; consentement de portrait par finalité implémenté au Lot 4. Formulaire de feedback, import et consentement de replay restent à réaliser aux lots autorisés.
 - **Statut :** VALIDÉE, mise en œuvre partielle au Lot 4.
+- **Précision du 2026-10-22 :** le formulaire natif ne demande pas d'identité, mais ses commentaires libres et certaines métadonnées peuvent identifier indirectement une personne ; « anonyme » n'est pas une garantie absolue. Voir `DEC-018` pour la rétention préparée.
 - **Source :** instructions du propriétaire ; `Docs/08_MODELE_DE_DONNEES.md`, `Docs/13_SECURITE_ET_CONFIDENTIALITE.md`.
 
 ## DEC-006 — Déploiement futur isolé sur l'infrastructure partagée
@@ -165,3 +166,30 @@ Aucune décision remplacée n'est identifiée dans les preuves disponibles **dep
 - **Conséquences :** validation éditoriale, export et publication restent trois événements distincts ; aucune diffusion externe n’est effectuée par l’application. L’historique expose aussi l’auteur de la publication.
 - **Statut :** appliquée et testée localement ; diffusion externe réelle non effectuée.
 - **Source :** instruction explicite de validation finale du Lot 4 et rôle Production défini dans `Docs/02_WORKFLOWS_ET_REGLES_METIER.md`.
+
+## DEC-016 — Ouverture du feedback natif et validation des variantes
+
+- **Date :** 2026-10-22 ; instruction explicite du propriétaire pour le Lot 5.
+- **Contexte :** le questionnaire standard doit être rapide à ouvrir sans supprimer la relecture des modifications ni la porte de confidentialité.
+- **Décision :** le modèle standard approuvé comporte six questions, seule la note de 1 à 5 étant obligatoire. Production peut ouvrir directement, après confirmation explicite, une instance inchangée du modèle **et de sa notice approuvée**. Toute modification des questions ou de la notice exige une validation Responsable de la version concernée. L'ouverture d'un formulaire public demeure un événement distinct de la validation du modèle.
+- **Conséquences :** chaque version et chaque réponse conservent leur rattachement ; aucune notice de recette n'autorise l'ouverture à de vrais participants. La durée de rétention et le texte de notice réels doivent être approuvés avant cette ouverture.
+- **Statut :** décision approuvée ; implémentation locale testée sur bases isolées, validation humaine du Lot 5 et notice réelle encore attendues.
+- **Source :** autorisation du Lot 5 fournie le 2026-10-22.
+
+## DEC-017 — Preuve métier de séance, citation et archive au Lot 5
+
+- **Date :** 2026-10-22 ; découle des exigences explicites du Lot 5.
+- **Contexte :** un lien Teams ouvert, une heure écoulée, une case `quote_approved` dans un brouillon ou un replay simplement référencé ne prouvent ni la séance tenue, ni une citation authentifiée, ni la diffusion autorisée.
+- **Décision :** seule la Responsable constate explicitement la tenue ; l'approbation d'une affiche de remerciement citant l'intervenant exige une citation exacte approuvée en base, avec provenance. Un replay déclaré disponible exige les droits d'enregistrement et de diffusion accordés avec preuve. La clôture est préparée par Production et approuvée par Responsable après vérification de la checklist ; les absences admises exigent une exception motivée persistée. Les tâches prédéfinies intactes peuvent se synchroniser sur ces preuves sans valider l'étape.
+- **Conséquences :** la recette Lot 4 de citation fictive crée désormais aussi un enregistrement de citation validé ; les anciennes affiches approuvées restent consultables, mais toute nouvelle approbation passe le contrôle actuel. Un report suspend les rappels pendants jusqu'à reconfirmation et conserve les rappels déjà exécutés.
+- **Statut :** implémentation locale testée ; usage réel et validation humaine du Lot 5 attendus.
+- **Source :** autorisation Lot 5, sections Jour J, transcription/citations, clôture et intégration au parcours.
+
+## DEC-018 — Verrou d'archive et purge de rétention préparée
+
+- **Date :** 2026-10-22 ; revue finale du Lot 5 par le propriétaire.
+- **Contexte :** une archive approuvée ne doit plus être modifiable librement ; les réponses de feedback exigent une purge exploitable et traçable. La durée de 180 jours est retenue comme **orientation proposée**, sous réserve de validation définitive de la notice et des obligations applicables.
+- **Décision :** l'API refuse les mutations ordinaires d'un épisode clôturé et PostgreSQL protège ses données métier directes et indirectes par triggers transactionnels. La clôture ferme le formulaire public et révoque son jeton. Aucun endpoint de réouverture n'est fourni en V1 ; une éventuelle réouverture future exigera une autorisation Responsable et un audit explicite. L'effacement d'une réponse sur demande et la purge de rétention restent possibles après clôture. Le retrait des droits d'un média reste possible par la Responsable avec audit ; aucun octroi de droits nouveau n'est permis sur archive. Une commande de purge périodique, séquentielle et journalisée est préparée, sans activation d'ordonnanceur en production.
+- **Conséquences :** les fixtures et le champ initial de l'interface sont alignés sur 180 jours ; aucune notice réelle n'est approuvée. La planification effective, le cycle des sauvegardes et la recette R2 réelle du Lot 5 restent des portes de production. Les réponses importées portent actuellement la date d'import, et cette règle doit être validée avant import réel.
+- **Statut :** choix technique appliqué localement ; durée et notice réelles non définitivement approuvées.
+- **Source :** instruction de revue finale du Lot 5 du 22 octobre 2026.

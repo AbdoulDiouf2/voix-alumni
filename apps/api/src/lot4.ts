@@ -13,6 +13,7 @@ import {
   mediaAssets,
   mediaConsents,
   user,
+  workflowEvents,
 } from "@voix-alumni/db/schema";
 import type { BusinessEnv } from "./lot2.js";
 import { createObjectStore, fileSha256, objectKey } from "./storage.js";
@@ -501,8 +502,50 @@ export function registerLot4Routes(app: Hono<BusinessEnv>, database: Database) {
       .select()
       .from(mediaAssets)
       .where(eq(mediaAssets.id, c.req.param("id")));
-    if (!asset?.episodeId || !(await access(asset.episodeId, actor.role)))
+    const episodeAccess = asset?.episodeId
+      ? await access(asset.episodeId, actor.role)
+      : null;
+    if (!asset?.episodeId || !episodeAccess)
       return c.json({ error: { code: "NOT_FOUND" } }, 404);
+    if (episodeAccess.episode.status === "cloture") {
+      if (body.data.status !== "revoked")
+        return c.json({ error: { code: "EPISODE_CLOSED" } }, 409);
+      if (asset.rightsStatus === "revoked")
+        return c.json({ error: { code: "ALREADY_REVOKED" } }, 409);
+      const withdrawn = await db.transaction(async (tx) => {
+        const [next] = await tx
+          .update(mediaAssets)
+          .set({
+            rightsStatus: "revoked",
+            rightsEvidenceRef: body.data.evidence_ref,
+            version: asset.version + 1,
+          })
+          .where(
+            and(
+              eq(mediaAssets.id, asset.id),
+              eq(mediaAssets.version, body.data.expected_version),
+            ),
+          )
+          .returning();
+        if (!next) return null;
+        await tx.insert(workflowEvents).values({
+          id: randomUUID(),
+          episodeId: asset.episodeId!,
+          subjectType: "media",
+          subjectId: asset.id,
+          action: "media.rights_revoked_after_closure",
+          actorUserId: actor.user.id,
+        });
+        return next;
+      });
+      if (!withdrawn)
+        return c.json({ error: { code: "VERSION_CONFLICT" } }, 409);
+      return c.json({
+        id: withdrawn.id,
+        rights_status: withdrawn.rightsStatus,
+        version: withdrawn.version,
+      });
+    }
     const updated = await db.transaction(async (tx) => {
       const [next] = await tx
         .update(mediaAssets)
@@ -943,6 +986,14 @@ export function registerLot4Routes(app: Hono<BusinessEnv>, database: Database) {
       fields.quote_approved !== "true"
     )
       return c.json({ error: { code: "QUOTE_NOT_APPROVED" } }, 409);
+    if (content.kind === "thank_you_poster" && fields.quote) {
+      const approvedQuote = await database.pool.query(
+        "SELECT id FROM episode_quotes WHERE episode_id=$1 AND exact_text=$2 AND status='approved' LIMIT 1",
+        [content.episodeId, fields.quote],
+      );
+      if (!approvedQuote.rowCount)
+        return c.json({ error: { code: "VERIFIED_QUOTE_REQUIRED" } }, 409);
+    }
     if (
       (content.kind === "final_thanks" ||
         (content.kind === "thank_you_poster" && fields.replay_url)) &&

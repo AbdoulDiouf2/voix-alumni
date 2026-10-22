@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import {
   organizerSchema,
   type Organizer,
@@ -46,7 +46,21 @@ import {
   WorkflowInbox,
   type Episode,
 } from "./Lot2";
-import { CreativeWorkspace } from "./Creative";
+const CreativeWorkspace = lazy(async () => ({
+  default: (await import("./Creative")).CreativeWorkspace,
+}));
+const EpisodeFeedback = lazy(async () => ({
+  default: (await import("./Lot5")).EpisodeFeedback,
+}));
+const EpisodeOperations = lazy(async () => ({
+  default: (await import("./Lot5")).EpisodeOperations,
+}));
+const FeedbackComparison = lazy(async () => ({
+  default: (await import("./Lot5")).FeedbackComparison,
+}));
+const PublicFeedback = lazy(async () => ({
+  default: (await import("./Lot5")).PublicFeedback,
+}));
 
 type Role = OrganizerRole;
 type NavItem = { label: string; path: string; icon: LucideIcon; lot: number };
@@ -625,71 +639,93 @@ function AppShell({
           </div>
         </header>
         <main className="content">
-          <Routes>
-            <Route path="/" element={<Dashboard organizer={organizer} />} />
-            <Route path="/intervenants" element={<AlumniList />} />
-            <Route
-              path="/intervenants/nouveau"
-              element={<AlumniForm organizer={organizer} />}
-            />
-            <Route
-              path="/intervenants/:id/modifier"
-              element={<AlumniForm organizer={organizer} />}
-            />
-            <Route
-              path="/intervenants/:id"
-              element={<AlumniPage organizer={organizer} />}
-            />
-            <Route
-              path="/episodes"
-              element={<EpisodeList organizer={organizer} />}
-            />
-            <Route
-              path="/episodes/nouveau"
-              element={<EpisodeNew organizer={organizer} />}
-            />
-            <Route
-              path="/episodes/:id"
-              element={<EpisodePage organizer={organizer} />}
-            />
-            <Route
-              path="/parametres"
-              element={
-                <Settings organizer={organizer} googleOAuth={googleOAuth} />
-              }
-            />
-            <Route
-              path="/studio"
-              element={
-                <CreativeWorkspace organizer={organizer} mode="poster" />
-              }
-            />
-            <Route
-              path="/communications"
-              element={
-                <CreativeWorkspace organizer={organizer} mode="message" />
-              }
-            />
-            <Route
-              path="/mediatheque"
-              element={<CreativeWorkspace organizer={organizer} mode="media" />}
-            />
-            {Object.keys(placeholders)
-              .filter(
-                (path) =>
-                  !["/studio", "/communications", "/mediatheque"].includes(
-                    path,
-                  ),
-              )
-              .map((path) => (
-                <Route
-                  key={path}
-                  path={path}
-                  element={<PlaceholderPage path={path} />}
-                />
-              ))}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <Suspense
+            fallback={
+              <div className="card lot5-panel" role="status">
+                Chargement de la page…
+              </div>
+            }
+          >
+            <Routes>
+              <Route path="/" element={<Dashboard organizer={organizer} />} />
+              <Route path="/intervenants" element={<AlumniList />} />
+              <Route
+                path="/intervenants/nouveau"
+                element={<AlumniForm organizer={organizer} />}
+              />
+              <Route
+                path="/intervenants/:id/modifier"
+                element={<AlumniForm organizer={organizer} />}
+              />
+              <Route
+                path="/intervenants/:id"
+                element={<AlumniPage organizer={organizer} />}
+              />
+              <Route
+                path="/episodes"
+                element={<EpisodeList organizer={organizer} />}
+              />
+              <Route
+                path="/episodes/nouveau"
+                element={<EpisodeNew organizer={organizer} />}
+              />
+              <Route
+                path="/episodes/:id"
+                element={<EpisodePage organizer={organizer} />}
+              />
+              <Route
+                path="/episodes/:id/session"
+                element={<EpisodeOperations organizer={organizer} />}
+              />
+              <Route
+                path="/episodes/:id/feedback"
+                element={<EpisodeFeedback organizer={organizer} />}
+              />
+              <Route path="/feedback" element={<FeedbackComparison />} />
+              <Route
+                path="/parametres"
+                element={
+                  <Settings organizer={organizer} googleOAuth={googleOAuth} />
+                }
+              />
+              <Route
+                path="/studio"
+                element={
+                  <CreativeWorkspace organizer={organizer} mode="poster" />
+                }
+              />
+              <Route
+                path="/communications"
+                element={
+                  <CreativeWorkspace organizer={organizer} mode="message" />
+                }
+              />
+              <Route
+                path="/mediatheque"
+                element={
+                  <CreativeWorkspace organizer={organizer} mode="media" />
+                }
+              />
+              {Object.keys(placeholders)
+                .filter(
+                  (path) =>
+                    ![
+                      "/studio",
+                      "/communications",
+                      "/mediatheque",
+                      "/feedback",
+                    ].includes(path),
+                )
+                .map((path) => (
+                  <Route
+                    key={path}
+                    path={path}
+                    element={<PlaceholderPage path={path} />}
+                  />
+                ))}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
       <nav className="mobile-bar" aria-label="Navigation mobile">
@@ -744,7 +780,7 @@ function AppShell({
   );
 }
 
-export function App() {
+function PrivateApp() {
   const [organizer, setOrganizer] = useState<Organizer | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [googleOAuth, setGoogleOAuth] = useState(false);
@@ -799,4 +835,21 @@ export function App() {
       />
     </BrowserRouter>
   );
+}
+
+export function App() {
+  if (window.location.pathname.startsWith("/feedback/public/"))
+    return (
+      <BrowserRouter>
+        <Suspense fallback={<div role="status">Chargement du formulaire…</div>}>
+          <Routes>
+            <Route
+              path="/feedback/public/:token"
+              element={<PublicFeedback />}
+            />
+          </Routes>
+        </Suspense>
+      </BrowserRouter>
+    );
+  return <PrivateApp />;
 }

@@ -8,7 +8,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "APP_ENV=test node --env-file-if-exists=../../.env.test ../../node_modules/vitest/vitest.mjs run",
-    "admin": "node --env-file=../../.env --import tsx src/admin.ts"
+    "admin": "node --env-file=../../.env --import tsx src/admin.ts",
+    "feedback:purge": "node --import tsx src/feedback-retention-cli.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1154.0",

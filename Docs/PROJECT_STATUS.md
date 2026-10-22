@@ -1,34 +1,30 @@
 # État courant du projet — Voix d'Alumni Studio
 
-> **Observé localement le 21 octobre 2026.** La CI distante, la production, les sauvegardes et leur restauration ne sont pas vérifiées.
+> **Observé localement le 22 octobre 2026.** Production, CI distante, sauvegardes et restauration non vérifiées.
 
-## Git et phase
+## Git et porte de validation
 
-- **Lot 4 :** design des deux affiches et orientation UX officiellement validés par le propriétaire ; finition, recette R2 et non-régression réalisées localement. Commit local de clôture créé sur `feat/lot-4-creative-communications` ; le SHA courant est celui de `git rev-parse HEAD`. Arbre propre après clôture. Aucun push, PR, merge ou déploiement autorisé ; Lot 5 bloqué.
-- La branche part de `origin/main` `10f3939` (fusion de la PR #3). Le commit porte sur le code du Lot 4, ses tests, captures et registres. Les originaux de `Docs/Voix d'alumni/` et `.env` restent ignorés par Git.
-- La maquette `Docs/voix_alumni_studio_prototype.html` reste inchangée (SHA-256 `5c65b156ca85f517b9328b8843e16739602371bdf3bb0d80b89bf1a6cc3e1b5c`).
+- Branche : `feat/lot-5-session-feedback-postproduction`, issue de `origin/main` `7ce9f0758c60f5c007312004a0d1fc5352d81ecb` après fusion de la PR #4. Dernier commit avant cette intervention : `47a063db664e2ee2a81fa7c35f3be82c5e5d0bf9`. Le propriétaire a accepté fonctionnellement le Lot 5 et autorisé un commit **local** de clôture après la recette ciblée. Aucun push, PR, merge, déploiement ni démarrage du Lot 6.
+- Lots 0–4 préservés. Migrations additives `0009`–`0016` appliquées uniquement à `voix_alumni_test`, `voix_alumni_e2e` et `voix_alumni_dev`, après contrôle des noms. Aucune migration de production.
+- Le Lot 5 est techniquement vérifié localement. L'ouverture à de vrais participants reste bloquée jusqu'à approbation humaine de la notice, de la durée et des informations de traitement ; la préparation de production reste distincte.
 
-## Fonctionnalités vérifiées
+## Fonctionnalités et dernières corrections vérifiées
 
-- **Lots 0–3 :** authentification fermée, vivier, épisodes, relais, huit étapes, tâches, demandes internes et notifications conservés ; parcours desktop/mobile couverts par la suite complète.
-- **Affiches :** deux modèles Canvas 1080 × 1350, portrait dominant, identité officielle ESMT/CPS/Voix d’Alumni, citation mise en avant, gestion des textes longs et des débordements. Aperçu et export PNG ont des pixels identiques dans la recette. Les originaux des logos sont privés et hors Git ; les portraits de test sont synthétiques.
-- **Studio et communications :** édition desktop/mobile, versions et historiques repliables, modèles de messages à variables résolues, copie identique à l’aperçu, liens obligatoires signalés. Validation Responsable, export Production et constat de publication Production restent des événements distincts. Le bouton de publication demande canal et confirmation ; l’API exige aussi `confirmed_external_publication: true`, contrôle le rôle et la version, puis conserve canal, auteur, date réelle et version. Une seconde publication de la même version est refusée.
-- **Données et sécurité :** migrations additives `0006`–`0008`, PostgreSQL, droits et consentement par finalité côté Hono, versions de concurrence, révisions et audit. Révocation des droits bloque une publication ultérieure et invalide le contenu concerné. Aucun message externe n’est envoyé.
+- Réunion et jour J : lien Teams saisi et vérifié manuellement, conducteur versionné, validation Responsable, constat explicite de séance tenue, rappels internes recalculés selon fuseau IANA. Un report suspend les rappels pendants jusqu'à reconfirmation et conserve les rappels accomplis.
+- Feedback : six questions standard dont seule la note obligatoire, variantes validées, formulaire public à jeton haché, réponses liées à leur version, résultats, CSV et import historique avec prévisualisation. La copie du lien n'est pas une publication. La durée initiale de l'interface et les fixtures sont alignées sur **180 jours proposés après dépôt**, sans approbation de notice réelle. Le logo horizontal officiel est visible sur le formulaire public ; l'original privé reste hors Git.
+- Une ouverture réelle est refusée côté API tant que l'accord explicite, l'identité et le contact du responsable, la base juridique, l'hébergement et le lien de notice ne sont pas configurés. Les tests E2E utilisent une notice explicitement fictive ; le texte indique qu'un commentaire libre peut identifier son auteur.
+- Une commande de purge régulière est prête, **sans ordonnanceur installé** : verrou PostgreSQL, lots transactionnels, effacement des réponses expirées et des empreintes, journal des exécutions et des échecs. La purge manuelle Responsable utilise le même moteur. Les imports historiques utilisent actuellement la date d'import comme date de dépôt, faute de date source.
+- Post-production : replay YouTube référencé manuellement avec droits, transcription privée TXT/VTT/SRT et relecture, citations sourcées et approuvées, remerciement distinct de sa diffusion, clôture avec checklist et dérogations motivées. Une archive refuse les mutations ordinaires en API et dans PostgreSQL ; la clôture ferme le formulaire public et révoque son jeton dans la même transaction. Une révocation de droits médias reste possible pour la Responsable avec audit. Aucune réouverture n'est disponible en V1.
+- Aucune création Teams, publication YouTube, diffusion email/WhatsApp ni contact direct de Production avec un intervenant.
 
-## Recette R2 de développement
+## Recette locale après toutes les corrections
 
-- Bucket privé préexistant `voix-alumni-dev`, endpoint HTTPS de juridiction UE et base `voix_alumni_e2e` vérifiés sans afficher d’identifiants. API et frontend dédiés exécutés en Node 24.
-- Upload via l’application de portraits synthétiques et des logos de recette ; métadonnées, empreintes, droits, consentements et publications vérifiés en PostgreSQL. Les médias récupérés depuis R2 ont alimenté l’aperçu réel ; quatre PNG exportés et téléchargés sur desktop/mobile, dimensions 1080 × 1350 et pixels égaux à l’aperçu.
-- Accès API sans session refusé. Le bucket refuse une requête non signée ; URL signée courte valide avant expiration et refusée après expiration. Révocation testée avant une tentative de publication. La première passe a créé 28 objets temporaires, la passe finale 14 ; tous ont été supprimés individuellement et leur absence confirmée. La base E2E a été réinitialisée ensuite. Aucun bucket créé ni média personnel importé.
+- API complète Lots 1–5 : **19/19 réussis**, 0 échec. Les tests couvrent notamment l'archive, les refus de mutation API et SQL, la révocation de droits avec audit, la fermeture du formulaire, la purge d'une réponse importée expirée, le journal d'auteur et l'idempotence.
+- Playwright complet Lots 1–5, desktop/mobile : **19 réussis, 1 ignoré intentionnellement, 0 échec**. Dernière passe après la correction des droits médias et du backend des réponses répétées. Dix captures Lot 5 actualisées dans `Docs/recette/lot-5/` ; les anciennes captures Lots 1–4 régénérées automatiquement ont été restaurées. Formulaire public et feedback privé mobiles inspectés visuellement : logo chargé, notice fictive et 180 jours visibles.
+- `format:check`, `lint`, `typecheck`, `build` : réussis après les derniers changements de code. Commande de purge exécutée sur la base E2E isolée : statut `completed`, 0 réponse éligible. La recette R2 du Lot 4 est issue d'un rapport antérieur ; **aucune recette R2 réelle du Lot 5 n'est revendiquée**.
 
-## Tests finaux
+## Limites et prochaine action
 
-- Après les dernières corrections, `format:check`, `lint`, `typecheck`, `build`, `git diff --check` réussis ; API **17/17**.
-- Playwright complet Lots 1–4, desktop/mobile : **17 réussites, 1 ignoré intentionnellement sur desktop, 0 échec**. Recette R2 ciblée finale : **2/2**. Captures et PNG de test dans `Docs/recette/lot-4/` ; captures historiques Lots 1–3 restaurées après exécution.
-- Un premier passage Playwright complet a échoué sur deux assertions d’auteur car il utilisait un ancien serveur API démarré avant la correction ; un nouveau serveur exécutant le code courant a passé la suite complète. L’incident est consigné dans `DEV_JOURNAL.md`.
-
-## Limites et prochaine porte
-
-- Restent pour le lot de stabilisation : droits et preuves des portraits/citations réels, contrôle de la configuration privée et du moindre privilège du bucket, sauvegarde/restauration, bucket de production et préparation de production. Ces points ne sont pas déclarés réalisés.
-- L’heure réelle de l’épisode du 25 octobre 2026, l’import historique 1–11 et le callback Google réel restent ouverts selon les décisions antérieures. Feedback natif, Teams, YouTube et Lot 5 ne font pas partie du Lot 4.
-- **Prochaine porte :** transmettre le commit local et les preuves au propriétaire ; attendre une autorisation distincte avant push, PR, merge ou déploiement.
+- La notice de `Docs/PROPOSITION_NOTICE_FEEDBACK.md` est une **proposition non approuvée**. Les 180 jours sont une orientation soumise à validation humaine. Identité/contact du responsable, base juridique, hébergement, durée des sauvegardes, modalités d'import réel, ordonnanceur et alertes de purge doivent être finalisés avant collecte réelle.
+- Les sauvegardes anciennes peuvent contenir des réponses jusqu'à leur expiration propre ; restauration et repurge, stockage R2 réel du Lot 5, droits réels des médias, sécurité de configuration de production, CI distante et déploiement restent non vérifiés. Les fixtures sont synthétiques, sans participant réel.
+- Commit local de clôture créé sur la branche indiquée ; SHA définitif donné par `git rev-parse HEAD`. Arbre de travail propre après commit. Prochaine porte : autorisation distincte pour toute publication ou Lot 6.
